@@ -1,5 +1,5 @@
 /config/local.php
 /storage/
 /dist/
-/vendor-assets/node_modules/
+/vendor-assets/node_modules
 __pycache__/
