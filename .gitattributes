@@ -1,0 +1,4 @@
+/PRD.md whitespace=-blank-at-eol
+/TASKS.md whitespace=-blank-at-eol
+/brainstorming.md whitespace=-blank-at-eol
+/public/assets/vendor/leaflet/* whitespace=cr-at-eol
