@@ -32,7 +32,7 @@ if (panel && state && source && typeof L !== 'undefined') {
             }).addTo(map);
     }
 
-    const markers = [];
+    const markers = new Map();
     const units = JSON.parse(source.textContent);
     for (const unit of units) {
         if (unit.latitude === null) continue;
@@ -47,13 +47,32 @@ if (panel && state && source && typeof L !== 'undefined') {
         summary.append(title, totals, detail);
         const marker = L.marker([unit.latitude, unit.longitude], {title: unit.name, alt: unit.name});
         marker.bindPopup(summary).addTo(map);
-        markers.push(marker.getLatLng());
+        markers.set(String(unit.id), marker);
     }
-    if (markers.length) {
-        map.fitBounds(L.latLngBounds(markers), {padding: [35, 35], maxZoom: 8, animate: false});
+    const reset = document.querySelector('#map-reset');
+    const fitMarkers = () => {
+        map.closePopup();
+        const positions = Array.from(markers.values(), marker => marker.getLatLng());
+        map.fitBounds(L.latLngBounds(positions), {padding: [35, 35], maxZoom: 8, animate: false});
+    };
+    if (markers.size) {
+        fitMarkers();
+        reset.hidden = false;
+        reset.addEventListener('click', fitMarkers);
         state.textContent = 'Marker menunjukkan satuan dengan koordinat tercatat.';
     } else {
         state.textContent = 'Tidak ada koordinat satuan yang sesuai filter.';
+    }
+    for (const button of document.querySelectorAll('[data-unit-focus]')) {
+        const marker = markers.get(button.dataset.unitFocus);
+        if (!marker) continue;
+        button.hidden = false;
+        button.addEventListener('click', () => {
+            map.setView(marker.getLatLng(), Math.max(8, map.getZoom()), {animate: false});
+            marker.openPopup();
+            panel.scrollIntoView({block: 'nearest'});
+            panel.focus({preventScroll: true});
+        });
     }
     const fullscreen = document.querySelector('#map-fullscreen');
     if (document.fullscreenEnabled) {

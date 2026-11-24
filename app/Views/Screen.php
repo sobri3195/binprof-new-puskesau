@@ -5,6 +5,7 @@ namespace Binprof\Views;
 use Binprof\Controllers\Web;
 use Binprof\Policies\Access;
 use Binprof\Repositories\Directory;
+use Binprof\Repositories\HistoryReport;
 use Binprof\Services\{Admin,Changes,Records};
 use function Binprof\{asset,csrfField,e,url};
 
@@ -88,20 +89,29 @@ final class Screen
         return '<a class="' . e($class) . '" href="' . e(url($route,$params)) . '">' . e($label) . '</a>';
     }
 
-    public static function filter(string $route, Access $user, array $filter): void
+    public static function filter(string $route, Access $user, array $filter, ?HistoryReport $report = null): void
     {
         self::getForm($route);
         echo '<div class="fields filters">';
         self::field('q','Cari nama atau nomor kedinasan','text',$filter['q'] ?? '');
-        foreach (Directory::FILTERS as $key=>[$label,$kind]) {
+        foreach (Directory::FILTERS as $key=>[$label,$kind,$column]) {
+            if ($report && $column === null) {
+                continue;
+            }
             $options = $kind === 'unit' ? array_column(Directory::unitOptions($user),'name','id')
                 : array_column(Records::options($kind,false),'name','id');
             self::field($key,$label,$options,$filter[$key] ?? '');
         }
-        self::field('from','Perkiraan mulai','date',$filter['from'] ?? '');
-        self::field('to','Perkiraan sampai','date',$filter['to'] ?? '');
+        if ($report) {
+            foreach ($report->fields() as $key=>[$label,$type]) {
+                self::field($key,$label,$type,$report->filters[$key] ?? '');
+            }
+        } else {
+            self::field('from','Perkiraan mulai','date',$filter['from'] ?? '');
+            self::field('to','Perkiraan sampai','date',$filter['to'] ?? '');
+        }
         if ($route !== 'dashboard') {
-            self::field('status','Status',['all'=>'Semua tanpa arsip'] + Records::STATUS,$filter['status'] ?? 'active');
+            self::field('status','Status dinas',['all'=>'Semua tanpa arsip'] + Records::STATUS,$filter['status'] ?? 'active');
             self::field('sort','Urutan',['name'=>'Nama A–Z','name_desc'=>'Nama Z–A','recent'=>'Pembaruan terbaru'],$filter['sort'] ?? 'name');
         }
         echo '</div><div class="actions"><button>Terapkan filter</button>' . self::link('Reset',$route,[],'button secondary') . '</div></form>';

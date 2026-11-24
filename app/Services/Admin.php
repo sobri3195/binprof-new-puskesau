@@ -38,11 +38,14 @@ final class Admin
             }
             $values = ['code'=>$code,'name'=>$name,'active'=>(int) (($input['active'] ?? '') === '1')];
             if ($kind === 'unit') {
-                $parent = id($input['parent_id'] ?? '');
+                $parentInput = $input['parent_id'] ?? '';
+                $parent = $parentInput === '' ? 0 : (id($parentInput) ?: fail(422,'Satuan induk tidak valid.'));
+                $visited = [$id=>true];
                 for ($ancestor = $parent; $ancestor;) {
-                    if ($ancestor === $id) {
+                    if (isset($visited[$ancestor])) {
                         fail(422,'Hierarki satuan tidak boleh bersiklus.');
                     }
+                    $visited[$ancestor] = true;
                     $row = db()->one('SELECT parent_id FROM units WHERE id=?', [$ancestor]) ?? fail(422,'Satuan induk tidak ditemukan.');
                     $ancestor = (int) $row['parent_id'];
                 }

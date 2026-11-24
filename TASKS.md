@@ -100,7 +100,7 @@ Hasil: login, sidebar, header, breadcrumb, drawer mobile, komponen form/tabel/fi
 
 Verifikasi: desktop/mobile dan navigasi keyboard berjalan; label jelas; tombol memiliki aksi; form tidak kehilangan masukan saat validasi gagal.
 
-### [ ] T10 — Master kategori, satuan dan referensi personel
+### [x] T10 — Master kategori, satuan dan referensi personel
 
 Prioritas: P0. Dependensi: T04, T07, T09. Referensi: FR01, FR03. Penerimaan: AC05, AC06.
 
@@ -250,7 +250,7 @@ Hasil: query scoped pada data terverifikasi, filter lintas riwayat dengan orang 
 
 Verifikasi: gabungan beberapa Dikum/Dikmil tidak menggandakan angka; data unit di luar scope dan data kasus tidak masuk payload; hasil sama dengan query pembanding.
 
-### [ ] T28 — Peta interaktif dan tabel alternatif
+### [x] T28 — Peta interaktif dan tabel alternatif
 
 Prioritas: P0. Dependensi: T09, T27. Referensi: FR12, NFR06. Penerimaan: AC25, AC26, AC30, AC36.
 

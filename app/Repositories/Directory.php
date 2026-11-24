@@ -15,7 +15,8 @@ final class Directory
         'award'=>['Penghargaan','award',null],
     ];
 
-    private string $from;
+    private string $joins;
+    private string $where;
     private array $args;
 
     public function __construct(Access $user, array $filter, bool $activeOnly = false)
@@ -70,10 +71,10 @@ final class Directory
         if (!empty($filter['from']) && !empty($filter['to']) && $filter['from'] > $filter['to']) {
             fail(422, 'Tanggal akhir harus setelah tanggal awal.');
         }
-        $this->from = " FROM personnel p JOIN user_unit_scopes s ON p.unit_id=s.unit_id AND s.user_id=?
+        $this->joins = " FROM personnel p JOIN user_unit_scopes s ON p.unit_id=s.unit_id AND s.user_id=?
             JOIN units u ON u.id=p.unit_id JOIN personnel_categories c ON c.id=p.category_id
-            LEFT JOIN retirement_forecasts f ON f.personnel_id=p.id AND f.validation_status='valid'
-            WHERE (" . implode(') AND (',$where) . ')';
+            LEFT JOIN retirement_forecasts f ON f.personnel_id=p.id AND f.validation_status='valid'";
+        $this->where = ' WHERE (' . implode(') AND (',$where) . ')';
     }
 
     private function identifierFilter(string $q): string
@@ -89,12 +90,28 @@ final class Directory
 
     public function rows(int $limit, int $offset, mixed $sort, bool $export = false): array
     {
-        $order = match ($sort) {
-            'name_desc'=>'p.name DESC,p.id DESC', 'recent'=>'p.updated_at DESC,p.id DESC', default=>'p.name,p.id',
-        };
+        $order = self::order($sort);
         return db()->all('SELECT p.id,p.name,u.name AS unit,c.name AS category,p.service_status, f.estimate_date' .
             ($export ? ',(SELECT cipher FROM personnel_identifiers WHERE personnel_id=p.id) AS identifier_cipher' : '') .
-            $this->from . ' ORDER BY ' . $order . ' LIMIT ? OFFSET ?', [...$this->args,$limit,$offset]);
+            $this->joins . $this->where . ' ORDER BY ' . $order . ' LIMIT ? OFFSET ?', [...$this->args,$limit,$offset]);
+    }
+
+    public function reportRows(HistoryReport $report, int $limit, int $offset, mixed $sort): array
+    {
+        [$join,$select,$condition,$values] = $report->query();
+        $order = self::order($sort);
+        return db()->all(
+            'SELECT p.id AS person_id,p.name,u.name AS unit,t.name AS type_name,' . $select
+            . $this->joins . $join . $this->where . $condition . ' ORDER BY ' . $order . ',h.id DESC LIMIT ? OFFSET ?',
+            [...$this->args,...$values,$limit,$offset]
+        );
+    }
+
+    private static function order(mixed $sort): string
+    {
+        return match ($sort) {
+            'name_desc'=>'p.name DESC,p.id DESC', 'recent'=>'p.updated_at DESC,p.id DESC', default=>'p.name,p.id',
+        };
     }
 
     public function aggregate(): array
@@ -102,7 +119,7 @@ final class Directory
         $groups = db()->all("SELECT u.id,u.name,u.latitude,u.longitude,COUNT(*) AS total,
             SUM(c.code='MILITER') AS military,SUM(c.code='PNS') AS pns,
             SUM(CASE WHEN f.estimate_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS retiring"
-            . $this->from . ' GROUP BY u.id,u.name,u.latitude,u.longitude ORDER BY u.name',
+            . $this->joins . $this->where . ' GROUP BY u.id,u.name,u.latitude,u.longitude ORDER BY u.name',
             [today(),(new \DateTimeImmutable(today()))->modify('+12 months')->format('Y-m-d'),...$this->args]);
         return array_map(static fn(array $group)=>[
             'id'=>(int) $group['id'], 'name'=>$group['name'],

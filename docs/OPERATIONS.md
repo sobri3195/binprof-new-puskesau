@@ -22,6 +22,8 @@ Akun dapat mengganti kata sandi dengan membuktikan kata sandi lama. Pemulihan CL
 
 Gunakan izin Ekspor personel atau grant ekspor pada kasus. Personel memakai filter dan urutan daftar, maksimum 5.000 baris per permintaan. Dataset lebih besar perlu dibagi per satuan atau filter lain.
 
+Menu **Pendidikan** dan **Penghargaan** menampilkan satu baris per riwayat terverifikasi dalam cakupan satuan. Filter riwayat diterapkan pada baris, lalu diteruskan ke CSV. Rekap pendidikan mempertahankan tahun saja bila tanggal lengkap tidak diketahui. Daftar personel dan peta tetap menghitung satu orang per profil.
+
 Di spreadsheet, impor lewat menu **Data → Dari teks/CSV**, pilih UTF-8 dan pemisah koma, lalu ubah kolom **Nomor kedinasan** menjadi tipe **Teks** sebelum memuat. Pembukaan otomatis dapat menghapus nol awal atau membulatkan nomor panjang. Nilai yang dapat dibaca sebagai formula dinetralkan dengan awalan apostrof.
 
 Aplikasi memvalidasi jenis, ukuran, dan struktur dasar lampiran serta mengenkripsi penyimpanan. Antivirus belum terpasang. Penetapan retensi, jadwal cadangan, dan pemeriksaan audit mengikuti kebijakan instalasi.
