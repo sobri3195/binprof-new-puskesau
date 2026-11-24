@@ -11,9 +11,10 @@ Lingkungan uji cloud Debian 13 menggunakan PHP CLI 8.4.28, MariaDB 11.8.9, dan C
 | Integrasi CLI | Tes akhir bulan 2027 dan tahun kabisat 2028, lease aktif/kedaluwarsa, mutasi efektif, dan invalidasi perkiraan lulus. |
 | Konkurensi | Dua proses verifikasi menghasilkan tepat satu keputusan dan satu penghargaan. Pada basis data restore terpisah, kegagalan penulisan notifikasi yang diinjeksi menggulung balik batch, dua proses retry selesai dengan tiga notifikasi, dan ulang setelah commit tidak menambah baris. |
 | Chromium | 1440×900 dan 390×844 pada fallback serta clean URL. Login, skip link, navigasi, rekap, fokus dan reset peta serta tautan personel di marker lulus. Marker dan daftar personel tetap dapat dipakai saat permintaan latar lokal sengaja dihentikan oleh runner. Formulir pengajuan mempertahankan input saat validasi gagal, lalu mengirim nilai koreksi pada percobaan berikutnya. |
-| Pemulihan | Dump dan impor ke database lain, lalu salin dokumen dan keyring. SHA-256 dokumen cocok, nomor 0000123 dapat didekripsi, dua personel dan dua relasi pihak sesuai. Rangkaian lokal sekitar 0,7 detik termasuk pemeriksaan migrasi terpisah. |
+| Pemulihan | Dump dan impor ke database terpisah dengan dokumen dan keyring yang dipulihkan. Manifest cocok pada 32 tabel, termasuk dua personel, dua relasi pihak, dan empat lampiran. Periksa kelengkapan relasi, dekripsi dan digest identitas serta checksum dokumen. Pengambilan manifest, dump, salin, impor dan verifikasi memerlukan sekitar 450 ms untuk fixture lokal. |
+| Kegagalan pemulihan | Uji menemukan lampiran hilang atau rusak, keyring salah, digest identitas berbeda, kunci historis yang hilang setelah rotasi, dan data berbeda meski jumlah baris sama. Uji terpisah mengubah satu nilai pada database hasil restore dan memeriksa kegagalan perbandingan, lalu mengembalikan nilai dan memperoleh kecocokan. |
 | Privasi direktori | Paket diekstrak dan diuji pada layout lokal A dan B. Halaman login dan aset dapat diakses. Probe sintetis, SQL dan jalur kunci mendapat 404. Preflight menolak alias yang mencakup penyimpanan atau direktori sementara unggahan, dan aplikasi menolak symlink sesi/dokumen ke direktori publik. Galat bootstrap mengembalikan pesan umum. |
-| Sintaks | 47 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
+| Sintaks | 49 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
 
 ## Kinerja sintetis
 
@@ -45,6 +46,13 @@ BINPROF_TEST_PHP="$(command -v php)" python3 tests/deployment_layout.py dist/bin
 Untuk clean URL, jalankan server yang sama dengan `clean_urls=true`, lalu arahkan skrip browser ke port tersebut lewat `BINPROF_TEST_URL`. Uji retry menargetkan database terpisah bernama `binprof_restore` hasil restore dari fixture integrasi. Untuk benchmark, impor skema, demo dan `tests/perf_fixture.sql` ke database MariaDB kosong, buat akun sintetis `demo-bench` dengan peran Pimpinan dan scope 100 satuan, lalu jalankan server dengan `PHP_CLI_SERVER_WORKERS=4`. Arahkan `tests/benchmark.py` ke port server tersebut.
 
 Pemeriksaan paket memakai server pengembangan PHP. Mode A diuji dengan URL bersih dan mode B dengan URL fallback. Kebijakan wajib HTTPS diperiksa melalui penolakan HTTP loopback.
+
+Untuk mengulang uji restore, ambil dump fixture integrasi setelah web dan cron dihentikan. Impor ke database sintetis lain, salin direktori dokumen serta keyring, dan buat konfigurasi pemulihan dengan penyimpanan terpisah. Jalankan perintah berikut dengan `BINPROF_CONFIG` menunjuk ke fixture sumber.
+
+```sh
+BINPROF_RESTORE_CONFIG=/path/privat/restore.php \
+    BINPROF_TEST_PHP="$(command -v php)" python3 tests/restore_verification.py
+```
 
 ## Pemeriksaan tertunda
 
