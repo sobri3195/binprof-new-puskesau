@@ -345,3 +345,7 @@ INSERT INTO schema_migrations(version) VALUES (1);
 -- Migration 002. Index the operational history for date-based review.
 CREATE INDEX audit_created_at ON audit_logs(created_at);
 INSERT INTO schema_migrations(version) VALUES (2);
+
+-- Migration 003. Keep detached draft files for audit and recovery.
+ALTER TABLE documents ADD COLUMN detached_at TIMESTAMP NULL DEFAULT NULL;
+INSERT INTO schema_migrations(version) VALUES (3);

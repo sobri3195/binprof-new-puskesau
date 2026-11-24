@@ -7,25 +7,18 @@ use function Binprof\{audit,config,crypto,db,fail};
 
 final class Documents
 {
-    public static function upload(Access $user, int $request, int $revision, array $upload): void
+    public static function upload(Access $user, int $request, int $revision, array $upload, int $replace = 0): void
     {
         $path = null;
         $created = false;
         try {
-            db()->transaction(static function () use ($user,$request,$revision,$upload,&$path,&$created): void {
-                $row = Changes::row($request,true);
-                $actor = Access::load($user->id,true) ?? fail(403, 'Akun tidak aktif.');
-                if ($actor->account['session_version'] !== $user->account['session_version']) {
-                    fail(403, 'Silakan masuk kembali.');
+            db()->transaction(static function () use ($user,$request,$revision,$upload,$replace,&$path,&$created): void {
+                $actor = self::draftActor($user,$request,$revision);
+                if ($replace) {
+                    self::detachActive($actor,$request,$revision,$replace);
                 }
-                if ($row['personnel_id']) {
-                    $row['current_unit'] = db()->one('SELECT unit_id FROM personnel WHERE id=? FOR UPDATE',[(int) $row['personnel_id']])['unit_id'];
-                }
-                Changes::canReview($actor,$row,'write');
-                if ($row['status'] !== 'draft' || $revision !== (int) $row['revision']) {
-                    fail(409, 'Hanya revisi draf saat ini yang dapat menerima berkas.');
-                }
-                if ((int) db()->one('SELECT COUNT(*) AS n FROM documents WHERE request_id=? AND revision=?', [$request,$revision])['n'] >= 10) {
+                if ((int) db()->one('SELECT COUNT(*) AS n FROM documents WHERE request_id=? AND revision=? AND detached_at IS NULL',
+                    [$request,$revision])['n'] >= 10) {
                     fail(422, 'Maksimal 10 lampiran per revisi.');
                 }
                 [$mime,$bytes] = self::inspect($upload);
@@ -41,8 +34,9 @@ final class Documents
                     if (!chmod($path,0600) || fwrite($handle,$encrypted) !== strlen($encrypted)) {
                         throw new \RuntimeException('Cannot save private document');
                     }
-                    fflush($handle);
-                    fsync($handle);
+                    if (!fflush($handle) || !fsync($handle)) {
+                        throw new \RuntimeException('Cannot sync private document');
+                    }
                 } finally {
                     fclose($handle);
                 }
@@ -64,6 +58,39 @@ final class Documents
             }
             throw $error;
         }
+    }
+
+    public static function detach(Access $user, int $request, int $revision, int $document): void
+    {
+        db()->transaction(static function () use ($user,$request,$revision,$document): void {
+            self::detachActive(self::draftActor($user,$request,$revision),$request,$revision,$document);
+        });
+    }
+
+    private static function draftActor(Access $user, int $request, int $revision): Access
+    {
+        $row = Changes::row($request,true);
+        $actor = Access::load($user->id,true) ?? fail(403,'Akun tidak aktif.');
+        if ($actor->account['session_version'] !== $user->account['session_version']) {
+            fail(403,'Silakan masuk kembali.');
+        }
+        if ($row['personnel_id']) {
+            $row['current_unit'] = db()->one('SELECT unit_id FROM personnel WHERE id=? FOR UPDATE',[(int) $row['personnel_id']])['unit_id'];
+        }
+        Changes::canReview($actor,$row,'write');
+        if ($row['status'] !== 'draft' || $revision !== (int) $row['revision']) {
+            fail(409,'Lampiran hanya dapat diubah pada revisi draf saat ini.');
+        }
+        return $actor;
+    }
+
+    private static function detachActive(Access $actor, int $request, int $revision, int $document): void
+    {
+        if (!db()->run('UPDATE documents SET detached_at=UTC_TIMESTAMP()
+            WHERE id=? AND request_id=? AND revision=? AND detached_at IS NULL',[$document,$request,$revision])->rowCount()) {
+            fail(404,'Lampiran tidak ditemukan pada draf ini.');
+        }
+        audit($actor->id,'document.detach',$document);
     }
 
     private static function inspect(array $upload): array
@@ -126,7 +153,8 @@ final class Documents
 
     public static function checkRevision(int $request, int $revision): void
     {
-        foreach (db()->all('SELECT * FROM documents WHERE request_id=? AND revision=?', [$request,$revision]) as $doc) {
+        foreach (db()->all('SELECT * FROM documents WHERE request_id=? AND revision=? AND detached_at IS NULL',
+            [$request,$revision]) as $doc) {
             self::bytes($doc);
         }
     }
@@ -152,7 +180,8 @@ final class Documents
 
     public static function download(Access $user, int $id): never
     {
-        $doc = db()->one('SELECT * FROM documents WHERE id=?', [$id]) ?? fail(404, 'Lampiran tidak ditemukan.');
+        $doc = db()->one('SELECT * FROM documents WHERE id=? AND detached_at IS NULL', [$id])
+            ?? fail(404,'Lampiran tidak ditemukan.');
         $row = Changes::row((int) $doc['request_id']);
         $rev = db()->one('SELECT revision,submitted_at FROM change_request_revisions WHERE request_id=? AND revision=?',
             [(int) $doc['request_id'],(int) $doc['revision']]);

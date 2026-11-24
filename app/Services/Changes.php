@@ -52,7 +52,11 @@ final class Changes
             } else {
                 $user->require('write');
                 if ($personId) {
-                    $unit = (int) $user->person($personId,true)['unit_id'];
+                    $person = $user->person($personId,true);
+                    $unit = (int) $person['unit_id'];
+                    if ($module === 'dikmil' && !Records::dikmilApplies((int) $person['category_id'])) {
+                        fail(422,'Dikmil tidak berlaku untuk kategori personel ini.');
+                    }
                 } elseif ($module !== 'profile' || !$user->unit($unit) || !db()->one('SELECT 1 FROM units WHERE id=? AND active=1', [$unit])) {
                     fail(404, 'Satuan atau personel tidak ditemukan.');
                 }
@@ -89,6 +93,40 @@ final class Changes
         $context = self::context(['id'=>$id,'revision'=>$rev]);
         db()->run('INSERT INTO change_request_revisions(request_id,revision,base_version,before_cipher,payload_cipher)
             VALUES (?,?,?,?,?)', [$id,$rev,$version,crypto()->seal($before,$context . ':before'),crypto()->seal($data,$context)]);
+    }
+
+    public static function draftToken(array $revision): string
+    {
+        $documents = db()->all('SELECT id FROM documents WHERE request_id=? AND revision=? AND detached_at IS NULL ORDER BY id',
+            [(int) $revision['request_id'],(int) $revision['revision']]);
+        return hash('sha256',$revision['payload_cipher'] . ':' . implode(',',array_column($documents,'id')));
+    }
+
+    public static function rebasePlan(string $module, int $version, int $personVersion, array $base, array $current, array $draft): array
+    {
+        $merged = [];
+        $conflicts = [];
+        $latest = [];
+        foreach (Records::fields($module) as $key=>[$label,$type]) {
+            // Some PDO configurations return numeric master IDs as strings.
+            $old = self::fieldValue($base[$key] ?? null,$type);
+            $new = self::fieldValue($current[$key] ?? null,$type);
+            $proposed = self::fieldValue($draft[$key] ?? null,$type);
+            $unchanged = $proposed === $old;
+            if (!$unchanged && $old !== $new && $new !== $proposed) {
+                $conflicts[$key] = $label;
+            }
+            $latest[$key] = $new;
+            $merged[$key] = $unchanged ? $new : $proposed;
+        }
+        $token = $version . ':' . $personVersion;
+        return ['merged'=>$merged,'conflicts'=>$conflicts,'current'=>$latest,'token'=>$token];
+    }
+
+    private static function fieldValue(mixed $value, string|array $type): mixed
+    {
+        return $value !== null && is_string($type) && !in_array($type,['text','textarea','date'],true)
+            ? (int) $value : $value;
     }
 
     public static function mutate(Access $user, int $id, int $expected, string $action, array $input): void
@@ -133,6 +171,10 @@ final class Changes
                 fail(409, 'Status atau revisi sudah berubah. Muat ulang pengajuan.');
             }
             $revision = self::revision($row) ?? fail(409, 'Revisi pengajuan tidak tersedia.');
+            if (in_array($action,['edit','save-submit','submit','rebase'],true)
+                && (!is_string($input['draft_token'] ?? null) || !hash_equals(self::draftToken($revision),$input['draft_token']))) {
+                fail(409,'Draf sudah berubah di tab atau sesi lain. Periksa nilai terbaru sebelum melanjutkan.');
+            }
             $context = self::context($row);
             $data = crypto()->open($revision['payload_cipher'],$context);
             if (in_array($action,['edit','save-submit'],true)) {
@@ -141,8 +183,22 @@ final class Changes
                     [crypto()->seal($data,$context),$id,$revisionNumber]);
             }
             if ($action === 'revise' || $action === 'rebase') {
-                [$version,$before] = Records::current($row,true);
-                self::snapshot($id,$revisionNumber + 1,$version,$before,$data);
+                [$version,$before,$person] = Records::current($row,true);
+                $base = crypto()->open($revision['before_cipher'],$context . ':before');
+                $plan = self::rebasePlan($row['module'],$version,(int) ($person['version'] ?? 0),$base,$before,$data);
+                $choices = $input['resolution'] ?? [];
+                if ($plan['conflicts'] && (!is_array($choices) || !is_string($input['base_token'] ?? null)
+                    || !hash_equals($plan['token'],$input['base_token']))) {
+                    fail(409,'Data terbit berubah pada kolom yang sama. Pilih nilai untuk setiap konflik.');
+                }
+                foreach ($plan['conflicts'] as $key=>$label) {
+                    $plan['merged'][$key] = match ($choices[$key] ?? null) {
+                        'current'=>$plan['current'][$key],
+                        'proposal'=>$plan['merged'][$key],
+                        default=>fail(409,'Pilih nilai untuk kolom ' . $label . '.'),
+                    };
+                }
+                self::snapshot($id,$revisionNumber + 1,$version,$before,$plan['merged']);
                 db()->run("UPDATE change_requests SET revision=revision+1,status='draft' WHERE id=?", [$id]);
             }
             if (in_array($action,['submit','save-submit','approve'],true)) {
@@ -152,7 +208,9 @@ final class Changes
                 }
                 [$version,$before,$person] = Records::current($row,true);
                 $base = crypto()->open($revision['before_cipher'],$context . ':before');
-                if ($version !== (int) $revision['base_version'] || ($before['_basis'] ?? null) !== ($base['_basis'] ?? null)) {
+                $savedBasis = $base['_basis'] ?? null;
+                $currentBasis = is_int($savedBasis) ? (int) ($person['version'] ?? 0) : ($before['_basis'] ?? null);
+                if ($version !== (int) $revision['base_version'] || $currentBasis !== $savedBasis) {
                     fail(409, 'Data dasar sudah berubah. Gunakan revisi berdasarkan versi terbaru.');
                 }
                 Records::validate($row['module'],$data,$person,$owner);

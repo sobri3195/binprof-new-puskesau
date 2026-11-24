@@ -5,13 +5,14 @@ Lingkungan uji cloud Debian 13 menggunakan PHP CLI 8.4.28, MariaDB 11.8.9, dan C
 | Pemeriksaan | Hasil |
 |---|---|
 | Impor instalasi dan demo | Skema kosong diimpor dengan klien MariaDB; dua satuan dan empat referensi demo dimuat terpisah. |
-| Migrasi 002 berdata | Impor baseline 001, muat dua satuan, jalankan migrasi 002, periksa kedua satuan dan indeks audit. |
+| Migrasi berdata | Migrasi 001→002 mempertahankan dua satuan dan membuat indeks audit. Migrasi 002→003 pada salinan data audit mempertahankan empat dokumen aktif dan semua tabel lain selain metadata skema yang memang berubah. |
 | Bootstrap | Dua akun awal berbeda berhasil dibuat. Pemanggilan kedua menolak dengan status keluar gagal dan pesan terkunci. |
 | Integrasi HTTP | 42 pemeriksaan bernama lulus melalui handler dan MariaDB nyata. Cakupan termasuk CSRF, snapshot, persetujuan sendiri, konflik versi, rollback duplikat, cakupan satuan/modul, unggah, dokumen, pendidikan, penghargaan, CSV, kasus, mutasi, arsip, pengingat, rate limit, filter dan ekspor rekap, integritas master, pengajuan atomik dari formulir, isolasi riwayat draf, serta pencabutan grant unduh lampiran kasus historis. |
 | Integrasi CLI | Tes akhir bulan 2027 dan tahun kabisat 2028, lease aktif/kedaluwarsa, mutasi efektif, dan invalidasi perkiraan lulus. |
+| Regresi audit P0 | 15 pemeriksaan lulus. Cakupan mencakup rebase pada kolom berbeda, pilihan bentrok, formulir lama dari tab lain, kelengkapan draf, rentang tanggal di dashboard, dasar perkiraan, jenis nomor nonaktif, Dikmil, batas POST 413, penggantian dan pelepasan lampiran, serta 41 login sah berturut-turut dengan pembatasan kegagalan tetap aktif. |
 | Konkurensi | Dua proses verifikasi menghasilkan tepat satu keputusan dan satu penghargaan. Pada basis data restore terpisah, kegagalan penulisan notifikasi yang diinjeksi menggulung balik batch, dua proses retry selesai dengan tiga notifikasi, dan ulang setelah commit tidak menambah baris. |
 | Chromium | 1440×900 dan 390×844 pada fallback serta clean URL. Login, skip link, navigasi, rekap, fokus dan reset peta serta tautan personel di marker lulus. Marker dan daftar personel tetap dapat dipakai saat permintaan latar lokal sengaja dihentikan oleh runner. Formulir pengajuan mempertahankan input saat validasi gagal, lalu mengirim nilai koreksi pada percobaan berikutnya. |
-| Pemulihan | Dump dan impor ke database terpisah dengan dokumen dan keyring yang dipulihkan. Manifest cocok pada 32 tabel, termasuk dua personel, dua relasi pihak, dan empat lampiran. Periksa kelengkapan relasi, dekripsi dan digest identitas serta checksum dokumen. Pengambilan manifest, dump, salin, impor dan verifikasi memerlukan sekitar 450 ms untuk fixture lokal. |
+| Pemulihan | Dump dan impor ke database terpisah dengan dokumen dan keyring yang dipulihkan. Manifest cocok pada 32 tabel dan tujuh lampiran, termasuk dua lampiran yang dilepas pada draf. Relasi, dekripsi dan digest identitas serta checksum dokumen lulus. Pengukuran 450 ms sebelumnya memakai fixture empat lampiran pada skema 002. |
 | Kegagalan pemulihan | Uji menemukan lampiran hilang atau rusak, keyring salah, digest identitas berbeda, kunci historis yang hilang setelah rotasi, dan data berbeda meski jumlah baris sama. Uji terpisah mengubah satu nilai pada database hasil restore dan memeriksa kegagalan perbandingan, lalu mengembalikan nilai dan memperoleh kecocokan. |
 | Privasi direktori | Paket diekstrak dan diuji pada layout lokal A dan B. Halaman login dan aset dapat diakses. Probe sintetis, SQL dan jalur kunci mendapat 404. Preflight menolak alias yang mencakup penyimpanan atau direktori sementara unggahan, dan aplikasi menolak symlink sesi/dokumen ke direktori publik. Galat bootstrap mengembalikan pesan umum. |
 | Sintaks | 49 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
@@ -32,11 +33,12 @@ Angka mengukur HTTP lokal dan tidak mencakup jaringan pengguna serta penyedia ti
 Impor skema dan `demo.sql` ke database sintetis baru. Siapkan `BINPROF_CONFIG` privat dengan `require_https=false` untuk loopback dan jalankan `php cli/init-storage.php`. Gunakan username `demo-admin` dan `demo-grants` dengan password fixture yang tertera di `tests/http_flow.py` saat bootstrap. Jika PHP perlu konfigurasi ekstensi khusus, set `BINPROF_TEST_PHP` ke path wrapper yang sesuai. Fixture akun uji hanya dibuat pada database baru lewat skrip HTTP.
 
 ```sh
-php -S 127.0.0.1:8710 -t public public/router.php
+php -d display_errors=0 -S 127.0.0.1:8710 -t public public/router.php
 # Terminal terpisah, dengan BINPROF_CONFIG yang menunjuk ke basis data sintetis
 BINPROF_TEST_PHP="$(command -v php)" python3 tests/http_flow.py
 BINPROF_TEST_PHP="$(command -v php)" python3 tests/concurrency.py
 python3 tests/browser_smoke.py
+python3 tests/p0_regression.py
 find app cli config public tests -name '*.php' -print0 | xargs -0 -n1 php -l
 node --check public/assets/map.js
 tools/package-release.sh

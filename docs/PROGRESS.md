@@ -18,3 +18,5 @@
 | T23, T33 | P1 | Menunggu dasar aturan resmi pensiun dan sumber data lama yang sah. |
 
 Rincian perintah dan hasil ada di [TEST_REPORT.md](TEST_REPORT.md). Gunakan basis data sintetis kosong saat mengulang tes HTTP. Prioritas berikutnya adalah memverifikasi pemasangan pada host uji serta menjalankan skenario penerimaan yang belum tercakup sebelum pemakaian produksi.
+
+Perbaikan hasil audit P0 mencakup rebase tiga arah, deteksi perubahan draf antar tab, konsistensi jendela dashboard, dasar tinjau perkiraan, jenis identitas nonaktif, status Dikmil, batas unggahan, serta login IP bersama. Indikator kelengkapan dan penggantian lampiran draf disertakan. Gerbang penerimaan pada host dan UAT instansi tetap dicatat di [laporan uji](TEST_REPORT.md).

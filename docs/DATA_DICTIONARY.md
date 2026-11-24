@@ -36,3 +36,5 @@ erDiagram
     change_request_revisions ||--o| approval_actions : decides
     change_request_revisions ||--o{ documents : attaches
 ```
+
+Migrasi 003 menambah `documents.detached_at`. Lampiran yang dilepas saat draf tetap tersimpan untuk audit dan pemulihan. Daftar, unduh, dan penerbitan normal hanya memakai lampiran dengan nilai `NULL`.

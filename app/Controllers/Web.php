@@ -69,6 +69,12 @@ final class Web
                 || !in_array($route,$post ? self::POST : self::GET,true)) {
                 fail(404,'Halaman tidak ditemukan.');
             }
+            if ($post && $route === 'upload') {
+                $postLimit = ini_parse_quantity(ini_get('post_max_size'));
+                if ($postLimit > 0 && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $postLimit) {
+                    fail(413,'Total unggahan melebihi batas server. Pilih berkas yang lebih kecil.');
+                }
+            }
             if ($post && (!is_string($_POST['csrf'] ?? null) || !hash_equals(csrf(),$_POST['csrf']))) {
                 fail(403,'Permintaan kedaluwarsa. Muat ulang formulir.');
             }
@@ -171,7 +177,14 @@ final class Web
                 Changes::mutate($user,$item,id($input['revision'] ?? ''),$action,$input);
                 self::redirect('request',['id'=>$item]);
             case 'upload':
-                Documents::upload($user,$item,id($input['revision'] ?? ''),$_FILES['document'] ?? []);
+                $revision = id($input['revision'] ?? '');
+                if ($action === 'detach') {
+                    Documents::detach($user,$item,$revision,id($input['document_id'] ?? ''));
+                } else {
+                    $replace = $input['replace_id'] ?? '';
+                    $replaceId = $replace === '' ? 0 : (id($replace) ?: fail(422,'Lampiran pengganti tidak valid.'));
+                    Documents::upload($user,$item,$revision,$_FILES['document'] ?? [],$replaceId);
+                }
                 self::redirect('request',['id'=>$item]);
             case 'master':
                 $kind = is_string($input['kind'] ?? null) ? $input['kind'] : '';
@@ -399,7 +412,8 @@ final class Web
             JOIN reference_values r ON r.id=a.type_id WHERE a.personnel_id=? ORDER BY a.awarded_on DESC',[$id]);
         $forecast = db()->one('SELECT f.*,u.username FROM retirement_forecasts f JOIN users u ON u.id=f.verified_by WHERE f.personnel_id=?',[$id]);
         $documents = $user->allows('download') ? db()->all("SELECT d.id,r.module FROM documents d JOIN change_requests r
-            ON r.id=d.request_id AND r.revision=d.revision WHERE r.personnel_id=? AND r.status='approved' ORDER BY d.id DESC",[$id]) : [];
+            ON r.id=d.request_id AND r.revision=d.revision WHERE r.personnel_id=? AND r.status='approved'
+            AND d.detached_at IS NULL ORDER BY d.id DESC",[$id]) : [];
         $history = db()->all("SELECT r.id,r.module,a.created_at,u.username FROM change_requests r
             JOIN approval_actions a ON a.request_id=r.id AND a.revision=r.revision AND a.decision='approved'
             JOIN users u ON u.id=a.actor_id WHERE r.personnel_id=? ORDER BY a.created_at DESC LIMIT 50",[$id]);
@@ -418,7 +432,8 @@ final class Web
         $parties = db()->all('SELECT p.id,p.name,cp.role_cipher FROM case_personnel cp JOIN personnel p ON p.id=cp.personnel_id WHERE cp.case_id=?',[$id]);
         $events = db()->all('SELECT * FROM case_events WHERE case_id=? ORDER BY version DESC LIMIT 50',[$id]);
         $documents = $user->caseCan($id,'download') ? db()->all("SELECT d.id FROM documents d JOIN change_requests r
-            ON r.id=d.request_id AND r.revision=d.revision WHERE r.case_id=? AND r.status='approved' ORDER BY d.id DESC",[$id]) : [];
+            ON r.id=d.request_id AND r.revision=d.revision WHERE r.case_id=? AND r.status='approved'
+            AND d.detached_at IS NULL ORDER BY d.id DESC",[$id]) : [];
         audit($user->id,'case.read',$id);
         self::view('case',$data['title'] ?? 'Kasus belum terverifikasi',$user,compact('id','data','parties','events','documents'));
     }
@@ -441,7 +456,10 @@ final class Web
         } else {
             $user->require('write');
             if ($personId) {
-                $user->person($personId);
+                $person = $user->person($personId);
+                if ($module === 'dikmil' && !Records::dikmilApplies((int) $person['category_id'])) {
+                    fail(422,'Dikmil tidak berlaku untuk kategori personel ini.');
+                }
                 [, $values] = Records::current(['module'=>$module,'personnel_id'=>$personId,
                     'education_id'=>in_array($module,['dikum','dikmil'],true) ? $item : null,'award_id'=>$module === 'award' ? $item : null]);
                 if ($module === 'service') {
@@ -486,7 +504,14 @@ final class Web
         $context = Changes::context($selected);
         $values = crypto()->open($revision['payload_cipher'],$context);
         $before = crypto()->open($revision['before_cipher'],$context . ':before');
+        $draftToken = $current && $canWrite && $row['status'] === 'draft' ? Changes::draftToken($revision) : '';
+        $rebasePlan = null;
+        if ($current && $canWrite && in_array($row['status'],['draft','returned'],true)) {
+            [$version,$latest,$person] = Records::current($row);
+            $rebasePlan = Changes::rebasePlan($row['module'],$version,(int) ($person['version'] ?? 0),$before,$latest,$values);
+        }
         if ($current && $canWrite && $row['status'] === 'draft'
+            && is_string($input['draft_token'] ?? null) && hash_equals($draftToken,$input['draft_token'])
             && in_array($input['action'] ?? '',['edit','save-submit'],true)) {
             $values = array_replace($values,array_intersect_key($input,Records::fields($row['module'])));
         }
@@ -495,7 +520,7 @@ final class Web
             FROM change_request_revisions WHERE request_id=?'
             . ($canWrite ? '' : ' AND submitted_at IS NOT NULL'),[$number,$number,$id]);
         $decision = db()->one('SELECT a.*,u.username FROM approval_actions a JOIN users u ON u.id=a.actor_id WHERE request_id=? AND revision=?',[$id,$number]);
-        $documents = db()->all('SELECT id,mime,size_bytes FROM documents WHERE request_id=? AND revision=?',[$id,$number]);
+        $documents = db()->all('SELECT id,mime,size_bytes FROM documents WHERE request_id=? AND revision=? AND detached_at IS NULL',[$id,$number]);
         $canDownload = $documents && Documents::canDownload($user,$row,$revision);
         $comment = is_string($input['comment'] ?? null) ? $input['comment'] : null;
         if ($row['module'] === 'case') {
@@ -503,7 +528,7 @@ final class Web
         }
         self::view('request',Records::LABELS[$row['module']] . ' · Pengajuan #' . $id,$user,
             compact('row','selected','revision','context','values','before','decision','documents','current',
-                'neighbors','canWrite','canDownload','message','comment'));
+                'neighbors','canWrite','canDownload','message','comment','draftToken','rebasePlan'));
     }
 
     public static function displayPairs(string $module, array $values): array
@@ -512,7 +537,7 @@ final class Web
         foreach (Records::fields($module) as $key=>[$label,$type]) {
             $value = $values[$key] ?? null;
             if (is_array($type)) {
-                $value = $type[$value] ?? $value;
+                $value = $type[$value] ?? ($value === 'not_applicable' && $key === 'status' ? 'Tidak berlaku' : $value);
             } elseif ($value && is_numeric($value) && !in_array($type,['text','textarea','year','date'],true)) {
                 $value = array_column(Records::options($type,false),'name','id')[$value] ?? $value;
             }

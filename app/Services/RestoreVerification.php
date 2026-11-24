@@ -57,7 +57,7 @@ final class RestoreVerification
 
         return $db->transaction(static function () use ($db): array {
             $schema = (int) $db->one('SELECT MAX(version) AS version FROM schema_migrations')['version'];
-            if ($schema !== 2) {
+            if (!in_array($schema,[2,3],true)) {
                 fail(422,'Gunakan versi verifier yang sesuai dengan skema cadangan.');
             }
             self::checkRelations($db);
