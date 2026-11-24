@@ -1,8 +1,8 @@
 # Operasional BINPROFKES
 
 1. Administrator menambahkan master dan akun. Tentukan cakupan satuan eksplisit dan modul setiap verifikator.
-2. Operator membuka Personel, membuat draf, mengunggah dokumen, dan mengajukan revisi. Perubahan masih privat sampai verifikator yang berwenang menerima. Gunakan revisi baru setelah dikembalikan. Untuk draf dengan versi dasar usang, perbarui versi dasar kemudian periksa kembali perubahan dan lampirannya sebelum diajukan.
-3. Verifikator membuka Pengajuan, membandingkan versi dasar dan usulan, memeriksa lampiran, lalu menyetujui atau mengembalikan dengan catatan. Operator menerima pemberitahuan dengan akses terkini.
+2. Operator membuka Personel, membuat draf, dan mengunggah dokumen. Tombol **Simpan dan ajukan** memakai nilai formulir saat ini dalam satu transaksi. Jika validasi gagal, perbaiki masukan yang ditampilkan kembali. Gunakan revisi baru setelah pengembalian. Untuk versi dasar usang, perbarui versi dasar, periksa perubahan, dan unggah lampiran yang diperlukan pada revisi baru.
+3. Verifikator membuka Pengajuan, membandingkan versi dasar dan usulan, memeriksa lampiran, lalu menyetujui atau mengembalikan dengan catatan. Tautan pengajuan yang sudah diketahui membuka revisi terakhir yang pernah diajukan saat operator sedang memperbaiki draf. Navigasi riwayat mengikuti izin yang masih berlaku. Lampiran kasus membutuhkan grant unduh tersendiri.
 4. Pimpinan memeriksa ringkasan, tabel unit tanpa koordinat, serta daftar personel yang mengikuti filter. Perkiraan terlewati menghasilkan permintaan konfirmasi. Status dinas mengikuti pengajuan kedinasan resmi.
 5. Pejabat penugasan memberi grant per tindakan berdasarkan ID kasus dan akun. Petugas dapat mengganti kata sandi awal sebelum menerima grant sensitif. Akses baca kasus tidak mengalihkan orang ke profil umum pihak terkait.
 
@@ -21,6 +21,8 @@ Akun dapat mengganti kata sandi dengan membuktikan kata sandi lama. Pemulihan CL
 ## CSV
 
 Gunakan izin Ekspor personel atau grant ekspor pada kasus. Personel memakai filter dan urutan daftar, maksimum 5.000 baris per permintaan. Dataset lebih besar perlu dibagi per satuan atau filter lain.
+
+Menu **Pendidikan** dan **Penghargaan** menampilkan satu baris per riwayat terverifikasi dalam cakupan satuan. Filter riwayat diterapkan pada baris, lalu diteruskan ke CSV. Rekap pendidikan mempertahankan tahun saja bila tanggal lengkap tidak diketahui. Daftar personel dan peta tetap menghitung satu orang per profil.
 
 Di spreadsheet, impor lewat menu **Data → Dari teks/CSV**, pilih UTF-8 dan pemisah koma, lalu ubah kolom **Nomor kedinasan** menjadi tipe **Teks** sebelum memuat. Pembukaan otomatis dapat menghapus nol awal atau membulatkan nomor panjang. Nilai yang dapat dibaca sebagai formula dinetralkan dengan awalan apostrof.
 

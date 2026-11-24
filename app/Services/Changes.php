@@ -18,7 +18,7 @@ final class Changes
         return $request;
     }
 
-    public static function revision(array $row): array
+    public static function revision(array $row): ?array
     {
         return db()->one('SELECT * FROM change_request_revisions WHERE request_id=? AND revision=?',
             [(int) $row['id'], (int) $row['revision']]);
@@ -114,14 +114,17 @@ final class Changes
                 fail(403, 'Pemohon tidak dapat memeriksa pengajuan sendiri.');
             }
             $capability = match ($action) {
-                'approve','return'=>'verify','submit'=>'submit','edit','revise','rebase','cancel'=>'write',
+                'approve','return'=>'verify','submit','save-submit'=>'submit','edit','revise','rebase','cancel'=>'write',
                 default=>fail(404, 'Tindakan tidak ditemukan.'),
             };
             self::canReview($lockedUser,$row,$capability);
+            if ($action === 'save-submit') {
+                self::canReview($lockedUser,$row,'write');
+            }
             $state = $row['status'];
             $revisionNumber = (int) $row['revision'];
             $allowed = match ($action) {
-                'edit','submit','rebase'=>$state === 'draft',
+                'edit','submit','save-submit','rebase'=>$state === 'draft',
                 'revise'=>$state === 'returned',
                 'approve','return'=>$state === 'submitted',
                 'cancel'=>in_array($state,['draft','submitted','returned'],true),
@@ -129,19 +132,20 @@ final class Changes
             if (!$allowed || $expected !== $revisionNumber) {
                 fail(409, 'Status atau revisi sudah berubah. Muat ulang pengajuan.');
             }
-            $revision = self::revision($row);
+            $revision = self::revision($row) ?? fail(409, 'Revisi pengajuan tidak tersedia.');
             $context = self::context($row);
             $data = crypto()->open($revision['payload_cipher'],$context);
-            if ($action === 'edit') {
+            if (in_array($action,['edit','save-submit'],true)) {
+                $data = Records::normalize($row['module'],$input);
                 db()->run('UPDATE change_request_revisions SET payload_cipher=? WHERE request_id=? AND revision=? AND submitted_at IS NULL',
-                    [crypto()->seal(Records::normalize($row['module'],$input),$context),$id,$revisionNumber]);
+                    [crypto()->seal($data,$context),$id,$revisionNumber]);
             }
             if ($action === 'revise' || $action === 'rebase') {
                 [$version,$before] = Records::current($row,true);
                 self::snapshot($id,$revisionNumber + 1,$version,$before,$data);
                 db()->run("UPDATE change_requests SET revision=revision+1,status='draft' WHERE id=?", [$id]);
             }
-            if (in_array($action,['submit','approve'],true)) {
+            if (in_array($action,['submit','save-submit','approve'],true)) {
                 $owner = $users[$ownerId];
                 if (!$owner || !$owner->request($row,'submit')) {
                     fail(409, 'Pemohon sudah tidak berwenang untuk pengajuan ini.');
@@ -152,7 +156,7 @@ final class Changes
                     fail(409, 'Data dasar sudah berubah. Gunakan revisi berdasarkan versi terbaru.');
                 }
                 Records::validate($row['module'],$data,$person,$owner);
-                if ($action === 'submit') {
+                if ($action !== 'approve') {
                     db()->run('UPDATE change_request_revisions SET submitted_at=UTC_TIMESTAMP() WHERE request_id=? AND revision=?',
                         [$id,$revisionNumber]);
                     db()->run("UPDATE change_requests SET status='submitted' WHERE id=?", [$id]);

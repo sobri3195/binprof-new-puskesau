@@ -5,7 +5,7 @@
 | Kelola master, akun dan jadwal | Administrator sistem. Edit akun memperbarui versi sesi. Perubahan akses sendiri memerlukan administrator lain. |
 | Daftar, pencarian, detail, agregat | Operator, Verifikator pusat atau Pimpinan, dengan cakupan satuan objek. |
 | Buat, ubah, ajukan, batalkan | Operator dengan cakupan yang berlaku. Draf dan keputusan terkait terikat pemilik. |
-| Baca dan putuskan revisi terajukan | Verifikator dengan satuan asal, satuan objek saat ini dan modul eksplisit. Mutasi juga memerlukan cakupan tujuan. Pemohon dilarang memutuskan sendiri. |
+| Baca dan putuskan revisi terajukan | Verifikator dengan satuan asal, satuan objek saat ini dan modul eksplisit. Riwayat baca mencakup revisi yang pernah diajukan. Keputusan hanya berlaku pada revisi terkini yang diajukan. Mutasi juga memerlukan cakupan tujuan. Pemohon dilarang memutuskan sendiri. |
 | Unduh lampiran umum terverifikasi | Akses baca profil, cakupan satuan saat ini, dan peran Unduh personel. |
 | Unduh draf atau revisi umum terajukan | Pemohon dalam cakupan atau verifikator modul berwenang setelah pengajuan dikirim. |
 | Ekspor personel | Akses baca dalam cakupan dan peran Ekspor personel. |

@@ -4,7 +4,7 @@ namespace Binprof\Controllers;
 
 use Binprof\Policies\Access;
 use Binprof\Problem;
-use Binprof\Repositories\Directory;
+use Binprof\Repositories\{Directory,HistoryReport};
 use Binprof\Services\{Admin,Auth,Changes,Documents,Inbox,Jobs,Records};
 use function Binprof\{audit,config,configPath,crypto,csrf,db,fail,id,url};
 
@@ -113,6 +113,20 @@ final class Web
                 } catch (Problem) {
                     self::view('error','Permintaan gagal',$user,['message'=>$message]);
                 }
+            } elseif (($route ?? '') === 'master' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+                && $user && in_array($status,[409,422],true)) {
+                try {
+                    self::master($user,$_POST,$_POST,$message);
+                } catch (\Throwable) {
+                    self::view('error','Permintaan gagal',$user,['message'=>$message]);
+                }
+            } elseif (in_array($route ?? '',['request','upload'],true) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+                && $user && in_array($status,[409,422],true)) {
+                try {
+                    self::request($user,id($_POST['id'] ?? ''),$_POST,$message);
+                } catch (\Throwable) {
+                    self::view('error','Permintaan gagal',$user,['message'=>$message]);
+                }
             } else {
                 self::view('error','Permintaan gagal',$user,['message'=>$message]);
             }
@@ -166,6 +180,7 @@ final class Web
             case 'master':
                 $kind = is_string($input['kind'] ?? null) ? $input['kind'] : '';
                 Admin::master($user,$kind,$item,$input);
+                $_SESSION['flash'] = 'Master data disimpan.';
                 self::redirect('master',['kind'=>$kind]);
             case 'accounts':
                 Admin::account($user,$item,$input);
@@ -194,12 +209,19 @@ final class Web
                 self::redirect('notifications');
             case 'export':
                 $user->require('export');
+                if (array_key_exists('report',$input)) {
+                    $report = new HistoryReport(is_string($input['report']) ? $input['report'] : '',$input);
+                    $filter = self::reportFilters($input);
+                    $rows = (new Directory($user,$filter))->reportRows($report,5001,0,$filter['sort'] ?? null);
+                    self::requireExportLimit($rows);
+                    audit($user->id,$report->route . '.export');
+                    self::csv($report->route === 'education' ? 'rekap-pendidikan.csv' : 'rekap-penghargaan.csv',
+                        array_values($report->columns()),array_map($report->row(...),$rows));
+                }
                 $filter = self::filters($input);
                 $directory = new Directory($user,$filter);
                 $rows = $directory->rows(5001,0,$filter['sort'] ?? null,true);
-                if (count($rows) > 5000) {
-                    fail(422,'Persempit filter. Ekspor dibatasi 5.000 baris.');
-                }
+                self::requireExportLimit($rows);
                 audit($user->id,'personnel.export');
                 self::csv('personel.csv',['ID','Nomor kedinasan','Nama','Satuan','Kategori','Status','Perkiraan'],
                     array_map(static fn($row)=>[$row['id'],crypto()->open($row['identifier_cipher'],'identifier:' . $row['id']),
@@ -213,6 +235,13 @@ final class Web
                 self::csv('kasus-' . $item . '.csv',['Kolom','Nilai'],self::displayPairs('case',$data));
         }
         fail(404,'Halaman tidak ditemukan.');
+    }
+
+    private static function requireExportLimit(array $rows): void
+    {
+        if (count($rows) > 5000) {
+            fail(422,'Persempit filter. Ekspor dibatasi 5.000 baris.');
+        }
     }
 
     private static function csv(string $file, array $headers, array $rows): never
@@ -234,6 +263,11 @@ final class Web
     public static function filters(array $input): array
     {
         return array_intersect_key($input,array_fill_keys([...array_keys(Directory::FILTERS),'q','status','from','to','sort','group'],true));
+    }
+
+    private static function reportFilters(array $input): array
+    {
+        return array_diff_key(self::filters($input),array_fill_keys(['dikum','dikmil','award','from','to','group'],true));
     }
 
     private static function get(string $route, Access $user): void
@@ -263,19 +297,21 @@ final class Web
                 break;
             case 'personnel':
             case 'retirement':
-            case 'education':
-            case 'awards':
                 if ($route === 'retirement') {
                     $filter['from'] ??= \Binprof\today();
                     $filter['to'] ??= (new \DateTimeImmutable(\Binprof\today()))->modify('+12 months')->format('Y-m-d');
                 }
-                if (in_array($route,['education','awards'],true)) {
-                    $filter['group'] = $route;
-                }
                 $directory = new Directory($user,$filter);
                 $list = $directory->rows(26,($page-1)*25,$filter['sort'] ?? null);
-                $title = ['personnel'=>'Personel','retirement'=>'Perkiraan pensiun','education'=>'Pendidikan','awards'=>'Penghargaan'][$route];
+                $title = $route === 'personnel' ? 'Personel' : 'Perkiraan pensiun';
                 self::view('personnel',$title,$user,compact('list','page','filter','route'));
+                break;
+            case 'education':
+            case 'awards':
+                $filter = self::reportFilters($_GET);
+                $report = new HistoryReport($route,$_GET);
+                $list = (new Directory($user,$filter))->reportRows($report,26,($page-1)*25,$filter['sort'] ?? null);
+                self::view('history-report',$report->title(),$user,compact('report','filter','list','page'));
                 break;
             case 'person':
                 self::person($user,$id);
@@ -308,14 +344,7 @@ final class Web
                 self::view('notifications','Notifikasi',$user,compact('rows'));
                 break;
             case 'master':
-                $user->require('admin');
-                $kind = is_string($_GET['kind'] ?? null) ? $_GET['kind'] : 'unit';
-                [$table] = Admin::MASTER[$kind] ?? fail(404,'Master tidak ditemukan.');
-                $where = $table === 'reference_values' ? 'kind=? AND ' : '';
-                $args = $table === 'reference_values' ? [$kind] : [];
-                $rows = db()->all("SELECT * FROM $table WHERE {$where}id<? ORDER BY id DESC LIMIT 51",[...$args,$before]);
-                $edit = $id ? db()->one("SELECT * FROM $table WHERE {$where}id=?",[...$args,$id]) : [];
-                self::view('master','Master data',$user,compact('kind','rows','edit'));
+                self::master($user,$_GET);
                 break;
             case 'accounts':
                 $user->require('admin');
@@ -341,6 +370,24 @@ final class Web
                 self::view('operations','Operasional sistem',$user,compact('rules','runs','scheduled'));
                 break;
         }
+    }
+
+    private static function master(Access $user, array $input, array $submitted = [], ?string $message = null): void
+    {
+        $user->require('admin');
+        $kind = is_string($input['kind'] ?? null) ? $input['kind'] : 'unit';
+        [$table] = Admin::MASTER[$kind] ?? fail(404,'Master tidak ditemukan.');
+        $where = $table === 'reference_values' ? 'kind=? AND ' : '';
+        $args = $table === 'reference_values' ? [$kind] : [];
+        $before = id($input['before'] ?? '') ?: PHP_INT_MAX;
+        $id = id($input['id'] ?? '');
+        $rows = db()->all("SELECT * FROM $table WHERE {$where}id<? ORDER BY id DESC LIMIT 51",[...$args,$before]);
+        $edit = $id ? (db()->one("SELECT * FROM $table WHERE {$where}id=?",[...$args,$id])
+            ?? fail(404,'Master tidak ditemukan.')) : [];
+        $values = array_replace($edit,array_intersect_key($submitted,array_fill_keys([
+            'code','name','active','parent_id','latitude','longitude','identifier_type_id','dikmil','unit_id',
+        ],true)));
+        self::view('master','Master data',$user,compact('kind','rows','edit','values','message'));
     }
 
     private static function person(Access $user, int $id): void
@@ -414,30 +461,53 @@ final class Web
         self::view('new','Draf ' . Records::LABELS[$module],$user,compact('module','fields','personId','item','values') + $extra);
     }
 
-    private static function request(Access $user, int $id): void
+    private static function request(Access $user, int $id, array $input = [], ?string $message = null): void
     {
         $row = Changes::row($id);
-        Changes::canReview($user,$row,'read');
-        $number = id($_GET['revision'] ?? '') ?: (int) $row['revision'];
-        if ($number > (int) $row['revision']) {
+        $canWrite = $user->request($row,'write');
+        if (!$canWrite && !$user->request($row,'verify')) {
+            fail(404,'Pengajuan tidak ditemukan.');
+        }
+        $chosen = $input['revision'] ?? $_GET['revision'] ?? null;
+        if ($chosen !== null) {
+            $number = id($chosen);
+        } elseif ($canWrite) {
+            $number = (int) $row['revision'];
+        } else {
+            $latest = db()->one('SELECT MAX(revision) AS revision FROM change_request_revisions
+                WHERE request_id=? AND submitted_at IS NOT NULL',[$id]);
+            $number = (int) $latest['revision'];
+        }
+        if (!$number || $number > (int) $row['revision']) {
             fail(404,'Revisi tidak ditemukan.');
         }
         $current = $number === (int) $row['revision'];
         $selected = array_replace($row,['revision'=>$number]);
         $revision = Changes::revision($selected);
-        if (!$revision || (!$revision['submitted_at'] && (int) $row['owner_id'] !== $user->id)) {
+        if (!$revision || !$user->revision($row,$revision)) {
             fail(404,'Revisi tidak ditemukan.');
         }
         $context = Changes::context($selected);
         $values = crypto()->open($revision['payload_cipher'],$context);
         $before = crypto()->open($revision['before_cipher'],$context . ':before');
+        if ($current && $canWrite && $row['status'] === 'draft'
+            && in_array($input['action'] ?? '',['edit','save-submit'],true)) {
+            $values = array_replace($values,array_intersect_key($input,Records::fields($row['module'])));
+        }
+        $neighbors = db()->one('SELECT MAX(CASE WHEN revision<? THEN revision END) AS previous,
+            MIN(CASE WHEN revision>? THEN revision END) AS following
+            FROM change_request_revisions WHERE request_id=?'
+            . ($canWrite ? '' : ' AND submitted_at IS NOT NULL'),[$number,$number,$id]);
         $decision = db()->one('SELECT a.*,u.username FROM approval_actions a JOIN users u ON u.id=a.actor_id WHERE request_id=? AND revision=?',[$id,$number]);
         $documents = db()->all('SELECT id,mime,size_bytes FROM documents WHERE request_id=? AND revision=?',[$id,$number]);
+        $canDownload = $documents && Documents::canDownload($user,$row,$revision);
+        $comment = is_string($input['comment'] ?? null) ? $input['comment'] : null;
         if ($row['module'] === 'case') {
             audit($user->id,'case.revision.read',(int) $row['case_id']);
         }
         self::view('request',Records::LABELS[$row['module']] . ' · Pengajuan #' . $id,$user,
-            compact('row','selected','revision','context','values','before','decision','documents','current'));
+            compact('row','selected','revision','context','values','before','decision','documents','current',
+                'neighbors','canWrite','canDownload','message','comment'));
     }
 
     public static function displayPairs(string $module, array $values): array

@@ -1,4 +1,5 @@
 """Run on a fresh synthetic database with demo.sql and the two test bootstrap users."""
+import csv
 import http.cookiejar
 import json
 import os
@@ -150,6 +151,54 @@ def main():
     result = op.call("export",{"dikum":2,"q":"0000123"})[1]
     check(b"0000123" in result and b"'=DATA DEMO Satu" in result and b"0000456" not in result,"CSV scoped, digit utuh dan formula dinetralkan")
 
+    report_filter = {"history_kind":"dikum","history_q":"DEMO Kampus","completion_year":2010,"history_status":"completed"}
+    report = op.call("education",query=report_filter)[1]
+    exported = op.call("export",{"report":"education",**report_filter})[1]
+    records = list(csv.DictReader(exported.decode().splitlines()))
+    check(b"DATA DEMO Kampus" in report and b">2010</td>" in report and b">2012</td>" not in report
+          and len(records) == 1 and records[0]["Selesai"] == "2010" and records[0]["Lembaga"] == "DATA DEMO Kampus",
+          "rekap pendidikan dan CSV menerapkan filter pada baris yang sama serta mempertahankan presisi tahun")
+    outsider_report = outsider.call("education",query=report_filter)[1]
+    outsider_export = outsider.call("export",{"report":"education",**report_filter})[1]
+    verify.call("export",{"report":"education",**report_filter},expected=403)
+    check(b"DATA DEMO Kampus" not in outsider_report and len(outsider_export.splitlines()) == 1,
+          "rekap dan CSV pendidikan menghormati cakupan satuan dan izin ekspor")
+    op.call("education",query={"completion_year":"2020-01-01"},expected=422)
+
+    award_values = {"type_id":4,"issuer":"DATA DEMO Pemberi sebelum revisi","awarded_on":"2020-02-29"}
+    revision_request = op.draft("award",person=1,**award_values)
+    first_upload = op.call("upload",{"id":revision_request,"revision":1},upload=("lama.pdf",PDF))[1]
+    first_document = int(re.search(rb'r=document&amp;id=(\d+)">Lampiran',first_upload)[1])
+    op.change(revision_request,"submit")
+    verify.change(revision_request,"return",comment="DATA DEMO Catatan peninjau")
+    op.change(revision_request,"revise")
+    private_upload = op.call("upload",{"id":revision_request,"revision":2},upload=("draf.pdf",PDF))[1]
+    private_document = int(re.search(rb'r=document&amp;id=(\d+)">Lampiran',private_upload)[1])
+    previous = verify.call("request",query={"id":revision_request})[1]
+    check(b"Revisi 1" in previous and b"DATA DEMO Catatan peninjau" in previous
+          and b"Revisi berikutnya" not in previous and verify.call("document",query={"id":first_document})[1] == PDF,
+          "verifikator masih dapat melihat revisi dan lampiran yang pernah diajukan saat perbaikan sedang disiapkan")
+    verify.call("request",query={"id":revision_request,"revision":2},expected=404)
+    verify.call("document",query={"id":private_document},expected=404)
+    outsider.call("document",query={"id":first_document},expected=404)
+    check(op.call("document",query={"id":private_document})[1] == PDF,
+          "revisi draf, lampirannya, dan riwayat lintas satuan dibatasi sesuai izin saat ini")
+
+    op.change(revision_request,"rebase",revision=2)
+    invalid = {**award_values,"issuer":"DATA DEMO Pemberi belum disimpan","awarded_on":""}
+    form = op.change(revision_request,"save-submit",revision=3,expected=422,**invalid)[1]
+    persisted = op.call("request",query={"id":revision_request})[1]
+    check(b'value="DATA DEMO Pemberi belum disimpan"' in form and b"wajib diisi" in form
+          and b'value="DATA DEMO Pemberi sebelum revisi"' in persisted,
+          "simpan dan ajukan yang gagal mengembalikan masukan tanpa menulis perubahan parsial")
+    op.change(revision_request,"save-submit",revision=3,**{**award_values,"issuer":"DATA DEMO Pemberi sesudah revisi"})
+    latest = verify.call("request",query={"id":revision_request})[1]
+    check(b"Revisi 3" in latest and b"DATA DEMO Pemberi sesudah revisi" in latest
+          and b"revision=1" in latest and b"revision=2" not in latest,
+          "simpan dan ajukan menerbitkan snapshot dari form serta melewati versi yang tidak diajukan")
+    verify.call("document",query={"id":private_document},expected=404)
+    op.change(revision_request,"cancel",revision=3)
+
     military = op.draft("dikmil", person=1, type_id=3, institution="DATA DEMO Akademi",
                         start_on="2019-01-01", end_on="2018-01-01", status="completed")
     op.change(military,"submit",expected=422)
@@ -164,6 +213,15 @@ def main():
         op.change(award,"submit")
         verify.change(award,"approve")
     check(b"Potensi duplikasi" in op.call("person",query={"id":1})[1],"penghargaan terverifikasi dan peringatan duplikasi")
+    unpublished = op.draft("award",person=1,type_id=4,issuer="DATA DEMO Belum Disetujui",awarded_on="2020-02-29")
+    op.change(unpublished,"submit")
+    award_filter = {"history_type":4,"award_from":"2020-02-29","award_to":"2020-02-29"}
+    report = op.call("awards",query=award_filter)[1]
+    records = list(csv.DictReader(op.call("export",{"report":"awards",**award_filter})[1].decode().splitlines()))
+    check(report.count(b"DATA DEMO Panitia") == 2 and b"DATA DEMO Belum Disetujui" not in report
+          and len(records) == 2 and all(r["Pemberi"] == "DATA DEMO Panitia" for r in records),
+          "rekap penghargaan dan CSV memuat setiap riwayat yang sudah disetujui dalam rentang tanggal")
+    op.call("awards",query={"award_from":"2020-03-01","award_to":"2020-02-29"},expected=422)
 
     today = datetime.now(ZoneInfo("Asia/Jakarta")).date()
     forecast = op.draft("retirement",person=1,estimate_date=str(today + timedelta(days=75)),source="DATA DEMO surat")
@@ -189,13 +247,27 @@ def main():
         case = op.draft("case",unit=1,category="discipline",number="DEMO-1",reported_on=str(today),
                         title="Rahasia demo",officer="DATA DEMO Petugas",stage="decision",
                         parties=f"1: pihak\n{second_person}: saksi",decision="DATA DEMO Keputusan",source="DATA DEMO Surat")
+        case_upload = op.call("upload",{"id":case,"revision":1},upload=("kasus.pdf",PDF))[1]
+        case_document = int(re.search(rb'Lampiran #(\d+)',case_upload)[1])
         op.change(case,"submit")
         verify.call("request",query={"id":case},expected=404)
         admin.call("case",query={"id":1},expected=404)
         grantor.call("case-grants",{"id":1,"target":2,"capability":"read","action":"give"},expected=422)
         for cap in ["read","verify","export"]:
             grantor.call("case-grants",{"id":1,"target":4,"capability":cap,"action":"give"})
-        verify.change(case,"approve")
+        verify.call("document",query={"id":case_document},expected=404)
+        grantor.call("case-grants",{"id":1,"target":4,"capability":"download","action":"give"})
+        verify.change(case,"return",comment="DATA DEMO Lengkapi kasus")
+        op.change(case,"revise")
+        check(verify.call("document",query={"id":case_document})[1] == PDF,
+              "lampiran riwayat kasus memerlukan grant unduh yang aktif")
+        grantor.call("case-grants",{"id":1,"target":4,"capability":"download","action":"revoke"})
+        verify.call("document",query={"id":case_document},expected=404)
+        case_history = verify.call("request",query={"id":case,"revision":1})[1]
+        check(f"r=document&amp;id={case_document}".encode() not in case_history,
+              "pencabutan grant kasus juga menutup unduh dari halaman revisi lama")
+        op.change(case,"submit",revision=2)
+        verify.change(case,"approve",revision=2)
         check(b"DATA DEMO Dua" in verify.call("case",query={"id":1})[1],"kasus dengan beberapa pihak dan grant eksplisit")
         check(b"Rahasia demo" in verify.call("case-export",{"id":1})[1],"ekspor kasus dengan grant terpisah")
         grantor.call("case-grants",{"id":1,"target":4,"capability":"read","action":"revoke"})
@@ -237,6 +309,27 @@ def main():
     for path in ["/database/binprofkes.sql","/config/local.php","/storage/keys.json","/cli/cron.php"]:
         op.fetch(BASE+path,expected=404)
     check(True,"rute privat ditolak dari document root uji")
+
+    category = {"kind":"category","code":"DEMO-EXTRA","name":"DATA DEMO Kategori Tambahan","identifier_type_id":2,"active":1}
+    admin.call("master",category)
+    duplicate_form = admin.call("master",{**category,"name":"DATA DEMO Nama Percobaan"},expected=409)[1]
+    check(b'value="DATA DEMO Nama Percobaan"' in duplicate_form
+          and b"<p class=\"notice error\"" in duplicate_form, "kode master duplikat ditolak dan input form tetap ada")
+    master_a = {"kind":"unit","id":1,"code":"DEMO-A","name":"DATA DEMO - Satuan A","active":1}
+    master_b = {"kind":"unit","id":2,"code":"DEMO-B","name":"DATA DEMO — Satuan B","active":1}
+    admin.call("master",{**master_a,"parent_id":2})
+    admin.call("master",{**master_b,"parent_id":1},expected=422)
+    check(True,"hierarki satuan menolak siklus setelah hubungan induk disimpan")
+    bad_coordinate = admin.call("master",{**master_b,"latitude":"91","longitude":"106"},expected=422)[1]
+    check(b'value="91"' in bad_coordinate and b"koordinat yang valid" in bad_coordinate,
+          "koordinat di luar rentang ditolak dan form mempertahankan nilainya")
+    admin.call("master",{**master_b,"latitude":"-6.2","longitude":"106.8"})
+    admin.call("master",{"kind":"award","id":4,"code":"DEMO","name":"DATA DEMO — Penghargaan","active":0})
+    check(b"DATA DEMO Panitia" in op.call("awards",query={"history_type":4})[1]
+          and b"DATA DEMO Kategori Tambahan" in outsider.call("new")[1],
+          "master nonaktif mempertahankan riwayat dan kategori baru tersedia saat input")
+    admin.call("master",{"kind":"award","id":4,"code":"DEMO","name":"DATA DEMO — Penghargaan","active":1})
+
     for _ in range(8):
         Browser().call("login",{"username":"absent-test","password":"bad"},expected=401)
     Browser().call("login",{"username":"absent-test","password":"bad"},expected=429)

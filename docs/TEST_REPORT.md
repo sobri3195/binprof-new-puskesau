@@ -7,13 +7,13 @@ Lingkungan uji cloud Debian 13 menggunakan PHP CLI 8.4.28, MariaDB 11.8.9, dan C
 | Impor instalasi dan demo | Skema kosong diimpor dengan klien MariaDB; dua satuan dan empat referensi demo dimuat terpisah. |
 | Migrasi 002 berdata | Impor baseline 001, muat dua satuan, jalankan migrasi 002, periksa kedua satuan dan indeks audit. |
 | Bootstrap | Dua akun awal berbeda berhasil dibuat. Pemanggilan kedua menolak dengan status keluar gagal dan pesan terkunci. |
-| Integrasi HTTP | 29 pemeriksaan bernama lulus melalui handler dan MariaDB nyata. Cakupan termasuk CSRF, snapshot, persetujuan sendiri, konflik versi, rollback duplikat, cakupan satuan/modul, unggah, dokumen, pendidikan, penghargaan, CSV, kasus, mutasi, arsip, pengingat dan rate limit. |
+| Integrasi HTTP | 42 pemeriksaan bernama lulus melalui handler dan MariaDB nyata. Cakupan termasuk CSRF, snapshot, persetujuan sendiri, konflik versi, rollback duplikat, cakupan satuan/modul, unggah, dokumen, pendidikan, penghargaan, CSV, kasus, mutasi, arsip, pengingat, rate limit, filter dan ekspor rekap, integritas master, pengajuan atomik dari formulir, isolasi riwayat draf, serta pencabutan grant unduh lampiran kasus historis. |
 | Integrasi CLI | Tes akhir bulan 2027 dan tahun kabisat 2028, lease aktif/kedaluwarsa, mutasi efektif, dan invalidasi perkiraan lulus. |
 | Konkurensi | Dua proses verifikasi menghasilkan tepat satu keputusan dan satu penghargaan. Pada basis data restore terpisah, kegagalan penulisan notifikasi yang diinjeksi menggulung balik batch, dua proses retry selesai dengan tiga notifikasi, dan ulang setelah commit tidak menambah baris. |
-| Chromium | 1440×900 dan 390×844 pada fallback serta clean URL. Login, fokus skip link, peta lokal, tabel satuan tanpa koordinat, sidebar, drawer dan halaman personel lulus. |
+| Chromium | 1440×900 dan 390×844 pada fallback serta clean URL. Login, skip link, navigasi, rekap, fokus dan reset peta serta tautan personel di marker lulus. Marker dan daftar personel tetap dapat dipakai saat permintaan latar lokal sengaja dihentikan oleh runner. Formulir pengajuan mempertahankan input saat validasi gagal, lalu mengirim nilai koreksi pada percobaan berikutnya. |
 | Pemulihan | Dump dan impor ke database lain, lalu salin dokumen dan keyring. SHA-256 dokumen cocok, nomor 0000123 dapat didekripsi, dua personel dan dua relasi pihak sesuai. Rangkaian lokal sekitar 0,7 detik termasuk pemeriksaan migrasi terpisah. |
 | Privasi direktori | Permintaan lokal untuk jalur SQL, config, penyimpanan kunci dan cron menerima 404 melalui document root yang diuji. |
-| Sintaks | 44 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
+| Sintaks | 46 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
 
 ## Kinerja sintetis
 

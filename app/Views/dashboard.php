@@ -13,8 +13,13 @@ $stats = ['Personel aktif'=>array_sum(array_column($groups,'total')),'Militer'=>
 <details class="card" <?= $filter ? 'open' : '' ?>><summary>Filter sebaran</summary><?php V::filter('dashboard',$user,$filter); ?></details>
 <div class="dashboard-grid">
     <section class="card map-card">
-        <div class="section-heading"><div><h2>Sebaran satuan</h2><p class="muted">Lokasi satuan berdasarkan koordinat yang tercatat.</p></div>
-            <button class="secondary" id="map-fullscreen" type="button" hidden>Layar penuh</button></div>
+        <div class="section-heading">
+            <div><h2>Sebaran satuan</h2><p class="muted">Lokasi satuan berdasarkan koordinat yang tercatat.</p></div>
+            <div class="actions">
+                <button class="secondary" id="map-reset" type="button" hidden>Reset tampilan</button>
+                <button class="secondary" id="map-fullscreen" type="button" hidden>Layar penuh</button>
+            </div>
+        </div>
         <div id="map" aria-label="Peta sebaran satuan" data-outline="<?= e(asset('region.geojson')) ?>"
             data-tiles="<?= e(config()['tiles']) ?>" data-attribution="<?= e(config()['tile_attribution']) ?>"></div>
         <p id="map-status" class="muted" role="status">Tabel satuan tersedia di bawah peta.</p>
@@ -35,7 +40,11 @@ $stats = ['Personel aktif'=>array_sum(array_column($groups,'total')),'Militer'=>
     <tbody><?php foreach ($groups as $group): ?><tr>
         <td><?= V::link($group['name'],'personnel',array_replace($filter,['unit'=>$group['id'],'status'=>'active'])) ?></td>
         <td><?= $group['total'] ?></td><td><?= $group['military'] ?></td><td><?= $group['pns'] ?></td>
-        <td><?= $group['latitude'] === null ? 'Belum tercatat' : 'Tercatat' ?></td>
+        <td><?php if ($group['latitude'] === null): ?>Belum tercatat<?php else: ?>
+            Tercatat
+            <button class="secondary" type="button" data-unit-focus="<?= $group['id'] ?>"
+                aria-label="<?= e('Fokus peta: ' . $group['name']) ?>" hidden>Fokus peta</button>
+        <?php endif ?></td>
     </tr><?php endforeach ?></tbody></table></div>
     <?php endif ?>
 </section>

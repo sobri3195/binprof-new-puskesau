@@ -73,6 +73,12 @@ final class Access
             'SELECT 1 FROM user_verification_modules WHERE user_id=? AND module=?', [$this->id,$module]);
     }
 
+    public function revision(array $request, array $revision): bool
+    {
+        return $this->request($request,'write')
+            || ($revision['submitted_at'] !== null && $this->request($request,'verify'));
+    }
+
     public function request(array $row, string $action): bool
     {
         $owner = (int) $row['owner_id'] === $this->id;
