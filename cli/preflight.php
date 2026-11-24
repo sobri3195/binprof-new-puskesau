@@ -51,10 +51,10 @@ cli(static function (): int {
             $db = Binprof\db();
             $database = $db->one('SELECT VERSION() AS v')['v'];
             $checks['Koneksi database'] = true;
-            $checks['Skema migrasi 002'] = (bool) $db->one('SELECT version FROM schema_migrations WHERE version=2');
+            $checks['Skema migrasi 003'] = (bool) $db->one('SELECT version FROM schema_migrations WHERE version=3');
         } catch (Throwable) {
             $checks['Koneksi database'] ??= false;
-            $checks['Skema migrasi 002'] = false;
+            $checks['Skema migrasi 003'] = false;
         }
     }
 

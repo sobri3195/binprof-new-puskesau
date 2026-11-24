@@ -33,7 +33,7 @@ final class Records
                 'program'=>['Program studi','text'], 'cohort'=>['Angkatan','text'],
                 'start_on'=>['Tanggal mulai','date'], 'start_year'=>['Tahun mulai (jika tanggal tidak diketahui)','year'],
                 'end_on'=>['Tanggal selesai','date'], 'end_year'=>['Tahun selesai (jika tanggal tidak diketahui)','year'],
-                'status'=>['Status',['ongoing'=>'Berlangsung','completed'=>'Selesai','not_applicable'=>'Tidak berlaku'],true],
+                'status'=>['Status',['ongoing'=>'Berlangsung','completed'=>'Selesai'],true],
                 'outcome'=>['Hasil','text'], 'certificate'=>['Nomor ijazah / sertifikat','text'],
             ],
             'award'=>[
@@ -117,6 +117,10 @@ final class Records
 
     public static function validate(string $module, array $data, ?array $person, Access $author): void
     {
+        if ($module === 'dikmil' && (!self::dikmilApplies((int) $person['category_id'])
+            || $data['status'] === 'not_applicable')) {
+            fail(422,'Keberlakuan Dikmil mengikuti kategori personel. Pilih status riwayat yang sesuai bila Dikmil berlaku.');
+        }
         foreach (self::fields($module) as $key => $field) {
             if (($field[2] ?? false) && $data[$key] === null) {
                 fail(422, $field[0] . ' wajib diisi untuk pengajuan.');
@@ -127,8 +131,17 @@ final class Records
                 fail(422, $field[0] . ' tidak aktif atau tidak tersedia.');
             }
         }
-        if ($module === 'profile' && $data['birth_date'] && $data['birth_date'] > today()) {
-            fail(422, 'Tanggal lahir tidak dapat berada di masa depan.');
+        if ($module === 'profile') {
+            if ($data['birth_date'] && $data['birth_date'] > today()) {
+                fail(422, 'Tanggal lahir tidak dapat berada di masa depan.');
+            }
+            $type = db()->one('SELECT i.id,i.active FROM personnel_categories c
+                JOIN identifier_types i ON i.id=c.identifier_type_id WHERE c.id=?',[$data['category_id']]);
+            if (!$type['active'] && (!$person || (int) $person['category_id'] !== $data['category_id']
+                || !db()->one('SELECT 1 FROM personnel_identifiers WHERE personnel_id=? AND type_id=? AND digest=?',
+                    [(int) $person['id'],(int) $type['id'],crypto()->identifier((int) $type['id'],$data['identifier'])]))) {
+                fail(422,'Jenis nomor kedinasan nonaktif tidak dapat digunakan untuk penetapan baru.');
+            }
         }
         if ($module === 'service') {
             if ($data['facility_id'] && !db()->one('SELECT 1 FROM facilities WHERE id=? AND unit_id=?',
@@ -141,10 +154,6 @@ final class Records
             }
         }
         if (in_array($module, ['dikum','dikmil'], true)) {
-            if ($module === 'dikmil' && !db()->one('SELECT 1 FROM personnel_categories WHERE id=? AND dikmil=1',
-                [(int) $person['category_id']]) && $data['status'] !== 'not_applicable') {
-                fail(422, 'Pendidikan militer belum berlaku pada kategori ini.');
-            }
             $startYear = $data['start_on'] ? (int) substr($data['start_on'],0,4) : $data['start_year'];
             $endYear = $data['end_on'] ? (int) substr($data['end_on'],0,4) : $data['end_year'];
             if (($data['start_on'] && $data['start_year']) || ($data['end_on'] && $data['end_year'])
@@ -164,6 +173,22 @@ final class Records
                 }
             }
         }
+    }
+
+    public static function dikmilApplies(int $category): bool
+    {
+        return (bool) db()->one('SELECT 1 FROM personnel_categories WHERE id=? AND dikmil=1',[$category]);
+    }
+
+    public static function missingProfileFields(array $profile): array
+    {
+        $missing = [];
+        foreach (self::fields('profile') as $key=>$field) {
+            if (($field[2] ?? false) && ($profile[$key] ?? null) === null) {
+                $missing[] = $field[0];
+            }
+        }
+        return $missing;
     }
 
     public static function parties(array $data): array
@@ -215,7 +240,7 @@ final class Records
             $data['certificate'] = crypto()->open($object['certificate_cipher'], 'certificate:' . $object['id']);
         }
         if ($module === 'retirement') {
-            $data['_basis'] = (int) ($person['version'] ?? 0);
+            $data['_basis'] = self::forecastBasis($person);
         }
         return [(int) ($object['version'] ?? 0),$data,$person];
     }
@@ -306,14 +331,26 @@ final class Records
         if (!$person) {
             db()->run("INSERT INTO service_assignments(personnel_id,unit_id,service_status,start_on) VALUES (?,?,'active',?)", [$p,$unit,today()]);
             db()->run('UPDATE change_requests SET personnel_id=? WHERE id=?', [$p,(int) $row['id']]);
-        } else {
+        } elseif (self::forecastBasis($person) !== self::forecastBasis(array_replace($person,$data))) {
             db()->run("UPDATE retirement_forecasts SET validation_status='review' WHERE personnel_id=?", [$p]);
         }
     }
 
+    private static function forecastBasis(array $person): array
+    {
+        $basis = [];
+        foreach (['category_id','rank_id','grade_id','corps_id'] as $field) {
+            $basis[$field] = isset($person[$field]) ? (int) $person[$field] : null;
+        }
+        $basis['birth_date'] = array_key_exists('birth_date',$person) ? $person['birth_date']
+            : ($person['birth_cipher'] ? crypto()->open($person['birth_cipher'],'birth:' . $person['id']) : null);
+        $basis['service_status'] = $person['service_status'];
+        return $basis;
+    }
+
     public static function service(int $p, array $data): void
     {
-        $current = db()->one('SELECT id,start_on FROM service_assignments WHERE open_personnel=? FOR UPDATE', [$p]);
+        $current = db()->one('SELECT id,start_on,service_status FROM service_assignments WHERE open_personnel=? FOR UPDATE', [$p]);
         if (!$current || $data['effective_on'] < $current['start_on']) {
             fail(409, 'Tanggal efektif mendahului penempatan terakhir.');
         }
@@ -322,6 +359,8 @@ final class Records
         db()->run('INSERT INTO service_assignments(unit_id,facility_id,position_title,service_status,personnel_id,start_on)
             VALUES (?,?,?,?,?,?)', [...$values,$p,$data['effective_on']]);
         db()->run('UPDATE personnel SET unit_id=?,facility_id=?,position_title=?,service_status=?,version=version+1 WHERE id=?', [...$values,$p]);
-        db()->run("UPDATE retirement_forecasts SET validation_status='review' WHERE personnel_id=?", [$p]);
+        if ($current['service_status'] !== $data['service_status']) {
+            db()->run("UPDATE retirement_forecasts SET validation_status='review' WHERE personnel_id=?", [$p]);
+        }
     }
 }

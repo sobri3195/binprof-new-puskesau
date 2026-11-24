@@ -4,11 +4,14 @@ use Binprof\Services\Records;
 use function Binprof\{crypto,e,today};
 $p = ['person'=>$person['id']];
 $edit = $user->allows('write');
+$missing = Records::missingProfileFields($profile);
+$dikmilApplies = Records::dikmilApplies((int) $person['category_id']);
 ?>
 <nav class="anchor-nav" aria-label="Bagian profil"><a href="#identitas">Identitas</a><a href="#kedinasan">Kedinasan</a><a href="#pendidikan">Pendidikan</a><a href="#penghargaan">Penghargaan</a><a href="#pensiun">Pensiun</a><a href="#dokumen">Dokumen dan riwayat</a></nav>
 <section class="card" id="identitas">
     <div class="section-heading"><div><h2>Identitas</h2><p class="muted">ID <?= e($person['id']) ?> · Versi <?= e($person['version']) ?> · <?= V::badge($person['service_status']) ?></p></div>
     <?php if ($edit): ?><?= V::link('Ajukan koreksi','new',$p+['module'=>'profile'],'button secondary') ?><?php endif ?></div>
+    <p class="muted"><?= $missing ? 'Identitas perlu dilengkapi: ' . e(implode(', ',$missing)) : 'Identitas wajib lengkap.' ?></p>
     <?php V::pairs('profile',$profile); ?>
 </section>
 <section class="card" id="kedinasan"><div class="section-heading"><h2>Riwayat kedinasan</h2>
@@ -18,15 +21,17 @@ $edit = $user->allows('write');
 </section>
 <section class="card" id="pendidikan">
 <?php foreach (['dikum','dikmil'] as $module): ?>
+    <?php $applies = $module === 'dikum' || $dikmilApplies; ?>
     <div class="section-heading"><h2><?= e(Records::LABELS[$module]) ?></h2>
-        <?php if ($edit): ?><?= V::link('Tambah riwayat','new',$p+['module'=>$module],'button secondary') ?><?php endif ?></div>
+        <?php if ($edit && $applies): ?><?= V::link('Tambah riwayat','new',$p+['module'=>$module],'button secondary') ?><?php endif ?></div>
     <?php $items = array_filter($education,static fn($row)=>$row['kind'] === $module); ?>
-    <?php if (!$items): ?><p class="empty">Belum ada riwayat terverifikasi.</p><?php endif ?>
+    <?php if (!$applies): ?><p class="empty">Dikmil tidak berlaku untuk kategori personel ini.</p>
+    <?php elseif (!$items): ?><p class="empty">Belum ada riwayat terverifikasi.</p><?php endif ?>
     <?php foreach ($items as $item): ?>
         <?php $item['certificate'] = $item['certificate_cipher'] ? crypto()->open($item['certificate_cipher'],'certificate:' . $item['id']) : null; ?>
         <details class="entry"><summary><?= e($item['label'] . ' · ' . $item['institution']) ?></summary>
             <?php V::pairs($module,$item); ?>
-            <?php if ($edit): ?><?= V::link('Ajukan koreksi','new',$p+['module'=>$module,'id'=>$item['id']]) ?><?php endif ?>
+            <?php if ($edit && $applies): ?><?= V::link('Ajukan koreksi','new',$p+['module'=>$module,'id'=>$item['id']]) ?><?php endif ?>
         </details>
     <?php endforeach ?>
 <?php endforeach ?>

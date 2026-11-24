@@ -20,9 +20,9 @@ cli(static function (): int {
     }
     if (db()->one('SELECT COUNT(*) AS n FROM service_assignments WHERE personnel_id=1 AND end_before IS NULL')['n'] !== 1
         || db()->one('SELECT unit_id FROM personnel WHERE id=1')['unit_id'] !== 2
-        || db()->one('SELECT validation_status FROM retirement_forecasts WHERE personnel_id=1')['validation_status'] !== 'review') {
+        || db()->one('SELECT validation_status FROM retirement_forecasts WHERE personnel_id=1')['validation_status'] !== 'valid') {
         throw new RuntimeException('scheduled service state');
     }
-    echo "PASS akhir bulan/kabisat, lock aktif/kedaluwarsa, mutasi efektif dan invalidasi perkiraan.\n";
+    echo "PASS akhir bulan/kabisat, lock aktif/kedaluwarsa, serta mutasi efektif dengan perkiraan tetap valid.\n";
     return 0;
 });

@@ -16,8 +16,11 @@ PRD menjadi kontrak perilaku. Brainstorming memberi arah produk dan rancangan me
 - Repositori lokal dan remote kosong pada awal implementasi. Struktur dan desain antarmuka dibangun dari spesifikasi. Halaman internal situs rujukan tidak diperiksa.
 - Peran umum menentukan tindakan. Cakupan satuan dan penugasan modul menentukan objek. Kasus memakai grant per tindakan dengan kedaluwarsa opsional.
 - Satu tabel riwayat pendidikan relasional memakai discriminator Dikum atau Dikmil. Jenis referensi juga diperiksa melalui allowlist di server.
-- Dokumen mengikat FK gabungan ke revisi, lalu revisi mengikat FK pengajuan ke objek yang relevan. Revisi lama dengan dokumen tetap tersimpan. Revisi baru memerlukan unggahan baru jika lampiran perlu diterbitkan lagi.
+- Dokumen mengikat FK gabungan ke revisi, lalu revisi mengikat FK pengajuan ke objek yang relevan. Revisi lama dengan dokumen tetap tersimpan. Revisi baru memerlukan unggahan baru jika lampiran perlu diterbitkan lagi. Lampiran pada draf bisa dilepas atau diganti sebelum diajukan. Migrasi 003 menyimpan waktu pelepasan tanpa membuang berkas privat.
 - Waktu efektif adalah tanggal kalender. Riwayat interval memakai ujung kanan eksklusif. Dua perubahan yang terjadi pada tanggal yang sama tetap meninggalkan riwayat, dengan interval hari kosong untuk keadaan antara keduanya.
 - Perubahan profil atau kedinasan menandai perkiraan untuk ditinjau secara konservatif. Satu pengajuan mutasi terjadwal dapat menjadi konflik jika versi dasar berubah sebelum tanggal efektif.
 - Data produksi dimulai dari master Militer/PNS tanpa akun universal. Demo sintetis diberi label DATA DEMO. Koordinat nyata, aset instansi, retensi, serta target pemulihan instalasi menunggu keputusan pemilik layanan.
 - T33 membutuhkan sumber data lama yang sah dan pemetaan kolom. Impor data lama masih di luar paket ini.
+
+- Keberlakuan Dikmil diturunkan dari master kategori. Riwayat historis tetap terbaca. Kategori yang tidak mengikuti Dikmil menampilkan status tidak berlaku pada profil.
+- Dasar perkiraan P0 memakai kategori, tanggal lahir, pangkat, golongan, korps, serta status dinas. Koreksi ejaan, jabatan dan lokasi penugasan menjaga validitas perkiraan. Perubahan cakupan penerima tetap dievaluasi oleh akses dan cron. Revisi lama dengan basis versi profil numerik tetap diperiksa terhadap versi profil saat ini dan dapat diperbarui melalui rebase.

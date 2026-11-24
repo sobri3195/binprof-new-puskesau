@@ -7,7 +7,7 @@ Aplikasi PHP native untuk administrasi personel. Operator menyusun perubahan, pu
 1. Siapkan PHP 8.4 dengan PDO MySQL, Fileinfo, Sodium dan Mbstring serta basis data MariaDB. Impor [database/binprofkes.sql](database/binprofkes.sql) ke basis data kosong.
 2. Salin [config/example.php](config/example.php) ke lokasi privat dan atur `BINPROF_CONFIG`. Konfigurasi dapat ditempatkan di `config/local.php` bila direktori proyek privat.
 3. Jalankan `php cli/init-storage.php` dan buat dua akun awal melalui `php cli/bootstrap-admin.php` sesuai panduan cPanel.
-4. Arahkan document root ke `public/`. Untuk pengembangan lokal dengan basis data sintetis, tetapkan `require_https` ke `false` pada konfigurasi tersebut dan jalankan `php -S 127.0.0.1:8710 -t public public/router.php`. Untuk pemasangan aktif, pertahankan HTTPS.
+4. Arahkan document root ke `public/`. Untuk pengembangan lokal dengan basis data sintetis, tetapkan `require_https` ke `false` pada konfigurasi tersebut dan jalankan `php -d display_errors=0 -S 127.0.0.1:8710 -t public public/router.php`. Untuk pemasangan aktif, pertahankan HTTPS.
 5. Buat master, akun operator, akun pemeriksa, cakupan satuan, dan modul verifikasi. Isi data uji hanya dari `database/demo.sql` jika diperlukan.
 
 ## Panduan proyek

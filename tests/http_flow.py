@@ -73,7 +73,14 @@ class Browser:
         return int(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["id"][0])
 
     def change(self, rid, action, revision=1, expected=200, **args):
+        if action in {"edit", "save-submit", "submit", "rebase", "revise"} and "draft_token" not in args:
+            args = {**self.request_tokens(rid, revision), **args}
         return self.call("request", {"id": rid, "revision": revision, "action": action, **args}, expected=expected)
+
+    def request_tokens(self, rid, revision=1):
+        _, body = self.call("request", query={"id": rid, "revision": revision})
+        return {name.decode(): value.decode() for name, value in
+                re.findall(rb'name="(draft_token|base_token)" value="([0-9a-f:]+)"', body)}
 
 
 def main():

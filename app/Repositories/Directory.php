@@ -18,6 +18,7 @@ final class Directory
     private string $joins;
     private string $where;
     private array $args;
+    private bool $hasForecastFilter = false;
 
     public function __construct(Access $user, array $filter, bool $activeOnly = false)
     {
@@ -66,6 +67,7 @@ final class Directory
                 }
                 $where[] = 'f.estimate_date ' . $operator . ' ?';
                 $this->args[] = $filter[$key];
+                $this->hasForecastFilter = true;
             }
         }
         if (!empty($filter['from']) && !empty($filter['to']) && $filter['from'] > $filter['to']) {
@@ -116,11 +118,17 @@ final class Directory
 
     public function aggregate(): array
     {
+        // An explicit forecast filter already constrains the valid forecast rows.
+        $retiring = $this->hasForecastFilter
+            ? 'COUNT(f.estimate_date)'
+            : 'SUM(CASE WHEN f.estimate_date BETWEEN ? AND ? THEN 1 ELSE 0 END)';
+        $window = $this->hasForecastFilter ? []
+            : [today(),(new \DateTimeImmutable(today()))->modify('+12 months')->format('Y-m-d')];
         $groups = db()->all("SELECT u.id,u.name,u.latitude,u.longitude,COUNT(*) AS total,
             SUM(c.code='MILITER') AS military,SUM(c.code='PNS') AS pns,
-            SUM(CASE WHEN f.estimate_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS retiring"
+            $retiring AS retiring"
             . $this->joins . $this->where . ' GROUP BY u.id,u.name,u.latitude,u.longitude ORDER BY u.name',
-            [today(),(new \DateTimeImmutable(today()))->modify('+12 months')->format('Y-m-d'),...$this->args]);
+            [...$window,...$this->args]);
         return array_map(static fn(array $group)=>[
             'id'=>(int) $group['id'], 'name'=>$group['name'],
             'latitude'=>$group['latitude'] === null ? null : (float) $group['latitude'],

@@ -3,8 +3,9 @@ use Binprof\Views\Screen as V;
 use Binprof\Services\Inbox;
 use function Binprof\{asset,config,e,today};
 $without = array_filter($groups,static fn($group)=>$group['latitude'] === null);
+$forecastLabel = !empty($filter['from']) || !empty($filter['to']) ? 'Perkiraan dalam filter' : 'Perkiraan ≤12 bulan';
 $stats = ['Personel aktif'=>array_sum(array_column($groups,'total')),'Militer'=>array_sum(array_column($groups,'military')),
-    'PNS'=>array_sum(array_column($groups,'pns')),'Satuan'=>count($groups),'Perkiraan ≤12 bulan'=>array_sum(array_column($groups,'retiring'))];
+    'PNS'=>array_sum(array_column($groups,'pns')),'Satuan'=>count($groups),$forecastLabel=>array_sum(array_column($groups,'retiring'))];
 ?>
 <p class="muted">Personel aktif terverifikasi dalam cakupan Anda · <?= e(today()) ?> · Dimuat <?= e(V::localTime(gmdate('Y-m-d H:i:s'))) ?></p>
 <div class="stats"><?php foreach ($stats as $label=>$number): ?>

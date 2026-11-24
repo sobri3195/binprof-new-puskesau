@@ -14,7 +14,8 @@ cli(static function (): int {
         $request = Changes::create($user,'award',1,0,0,[
             'type_id'=>'4','issuer'=>'DATA DEMO Uji konkurensi','awarded_on'=>'2021-01-01',
         ]);
-        Changes::mutate($user,$request,1,'submit',[]);
+        $revision = Changes::revision(Changes::row($request));
+        Changes::mutate($user,$request,1,'submit',['draft_token'=>Changes::draftToken($revision)]);
         echo $request;
     } elseif ($mode === 'approve') {
         try {
