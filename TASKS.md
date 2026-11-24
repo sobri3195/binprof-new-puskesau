@@ -44,7 +44,7 @@ Hasil: `docs/DATA_DICTIONARY.md`, diagram relasi yang diperlukan, daftar status,
 
 Verifikasi: ada FK/pemilik untuk semua lampiran; case grant tidak bergantung pada role admin umum; versi dan kunci unik deduplikasi dirancang; kategori baru tidak menjalankan kode konfigurasi.
 
-### [ ] T03 — Bangun kerangka PHP native dan konfigurasi privat
+### [x] T03 — Bangun kerangka PHP native dan konfigurasi privat
 
 Prioritas: P0. Dependensi: T01. Referensi: NFR01, NFR03, FR02. Penerimaan: AC30, AC31, AC35.
 

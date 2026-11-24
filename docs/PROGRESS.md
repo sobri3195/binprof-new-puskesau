@@ -12,7 +12,8 @@
 | T27–T30 | Selesai lokal | Agregat personel unik, fokus dan reset peta, fallback tabel dan marker saat latar lokal gagal, serta CSV scoped. Provider tile eksternal opsional menunggu konfigurasi instansi. |
 | T31–T32 | Selesai lokal | Mutasi masa depan, perubahan scope saat efektif, riwayat, arsip dan pemulihan. |
 | T34–T37 | Berjalan lokal | Integrasi HTTP, uji transaksi, lint, browser, impor/migrasi dan benchmark. Sebagian skenario penerimaan serta runtime hosting masih perlu uji. |
-| T38–T40 | Menunggu verifikasi deployment/UAT | Paket, panduan dua mode dan restore terpisah tersedia. Uji domain, konfigurasi TLS, kuota, cron hosting dan UAT instansi belum tersedia. |
+| T38 | Terverifikasi lokal, menunggu host target | ZIP dari commit Git, preflight kedua layout, penolakan root yang tumpang tindih dan symlink sesi/dokumen publik, serta probe HTTP sintetis lulus. Apache/cPanel, alias nyata, TLS, kuota dan cron pada host target masih perlu diperiksa. |
+| T39–T40 | Menunggu verifikasi deployment/UAT | Restore terpisah tersedia. Retensi, target pemulihan dan UAT instansi belum tersedia. |
 | T23, T33 | P1 | Menunggu dasar aturan resmi pensiun dan sumber data lama yang sah. |
 
 Rincian perintah dan hasil ada di [TEST_REPORT.md](TEST_REPORT.md). Gunakan basis data sintetis kosong saat mengulang tes HTTP. Prioritas berikutnya adalah memverifikasi pemasangan pada host uji serta menjalankan skenario penerimaan yang belum tercakup sebelum pemakaian produksi.

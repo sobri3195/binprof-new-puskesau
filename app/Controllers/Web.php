@@ -5,8 +5,8 @@ namespace Binprof\Controllers;
 use Binprof\Policies\Access;
 use Binprof\Problem;
 use Binprof\Repositories\{Directory,HistoryReport};
-use Binprof\Services\{Admin,Auth,Changes,Documents,Inbox,Jobs,Records};
-use function Binprof\{audit,config,configPath,crypto,csrf,db,fail,id,url};
+use Binprof\Services\{Admin,Auth,Changes,Documents,Inbox,Jobs,PrivateLayout,Records};
+use function Binprof\{audit,config,crypto,csrf,db,fail,id,url};
 
 final class Web
 {
@@ -46,22 +46,23 @@ final class Web
                 $imageOrigin = ' ' . $match[1];
             }
             header("Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:$imageOrigin; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
-            $storage = realpath($c['storage']);
-            $webroot = realpath($_SERVER['DOCUMENT_ROOT']);
-            $keyring = realpath($c['keys']);
-            $privateConfig = realpath(configPath());
-            if (!$storage || !$webroot || !$keyring || !$privateConfig || self::inside($storage,$webroot)
-                || self::inside($keyring,$webroot) || self::inside($privateConfig,$webroot)
-                || self::inside(dirname(__DIR__,2) . '/app',$webroot)) {
+            if (PrivateLayout::problems($_SERVER['DOCUMENT_ROOT'] ?? '',$c)) {
                 throw new \RuntimeException('Private data location check failed');
             }
             session_name('binprof_session');
-            session_save_path($storage . '/sessions');
+            ini_set('session.save_handler','files');
+            $sessions = realpath($c['storage'] . '/sessions');
+            if ($sessions === false || !is_dir($sessions) || !is_writable($sessions)) {
+                throw new \RuntimeException('Private sessions unavailable');
+            }
+            session_save_path($sessions);
             session_set_cookie_params(['path'=>($c['base_path'] ?: '/') . ($c['base_path'] ? '/' : ''),
                 'secure'=>$secure,'httponly'=>true,'samesite'=>'Lax']);
             ini_set('session.use_strict_mode','1');
             ini_set('session.use_only_cookies','1');
-            session_start();
+            if (ini_get('session.save_handler') !== 'files' || session_save_path() !== $sessions || !session_start()) {
+                throw new \RuntimeException('Private sessions could not be started');
+            }
             $route = self::route();
             $post = $_SERVER['REQUEST_METHOD'] === 'POST';
             if (!in_array($_SERVER['REQUEST_METHOD'], ['GET','POST'],true)
@@ -131,11 +132,6 @@ final class Web
                 self::view('error','Permintaan gagal',$user,['message'=>$message]);
             }
         }
-    }
-
-    private static function inside(string $path, string $root): bool
-    {
-        return $path === $root || str_starts_with($path,$root . '/');
     }
 
     private static function route(): string

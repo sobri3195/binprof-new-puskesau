@@ -2,8 +2,16 @@
 declare(strict_types=1);
 require __DIR__ . '/common.php';
 
+use Binprof\Services\PrivateLayout;
+
 cli(static function (): int {
     $config = Binprof\config();
+    foreach (PrivateLayout::webRoots(array_slice($_SERVER['argv'],1)) as $webRoot) {
+        $problems = PrivateLayout::problems($webRoot,$config,true);
+        if ($problems) {
+            Binprof\fail(422,'Perbaiki penempatan privat sebelum inisialisasi. ' . implode('; ',$problems));
+        }
+    }
     $paths = [$config['storage'],$config['storage'] . '/sessions',$config['storage'] . '/documents',dirname($config['keys'])];
     foreach (array_unique($paths) as $path) {
         if (!is_dir($path) && !mkdir($path,0700,true)) {
