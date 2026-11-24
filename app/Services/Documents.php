@@ -14,8 +14,14 @@ final class Documents
         try {
             db()->transaction(static function () use ($user,$request,$revision,$upload,&$path,&$created): void {
                 $row = Changes::row($request,true);
-                $user = Access::load($user->id,true) ?? fail(403, 'Akun tidak aktif.');
-                Changes::canReview($user,$row,'write');
+                $actor = Access::load($user->id,true) ?? fail(403, 'Akun tidak aktif.');
+                if ($actor->account['session_version'] !== $user->account['session_version']) {
+                    fail(403, 'Silakan masuk kembali.');
+                }
+                if ($row['personnel_id']) {
+                    $row['current_unit'] = db()->one('SELECT unit_id FROM personnel WHERE id=? FOR UPDATE',[(int) $row['personnel_id']])['unit_id'];
+                }
+                Changes::canReview($actor,$row,'write');
                 if ($row['status'] !== 'draft' || $revision !== (int) $row['revision']) {
                     fail(409, 'Hanya revisi draf saat ini yang dapat menerima berkas.');
                 }
@@ -42,7 +48,7 @@ final class Documents
                 }
                 db()->run('INSERT INTO documents(request_id,revision,storage_key,mime,size_bytes,checksum) VALUES (?,?,?,?,?,?)',
                     [$request,$revision,$key,$mime,strlen($bytes),hash('sha256',$bytes)]);
-                audit($user->id,'document.upload',db()->lastId());
+                audit($actor->id,'document.upload',db()->lastId());
             });
         } catch (\Throwable $error) {
             if ($created && is_file($path)) {
@@ -121,27 +127,27 @@ final class Documents
         }
     }
 
+    public static function canDownload(Access $user, array $request, array $revision): bool
+    {
+        $approved = (int) $request['revision'] === (int) $revision['revision'] && $request['status'] === 'approved';
+        if ($request['module'] === 'case') {
+            $case = (int) $request['case_id'];
+            return $user->caseCan($case,'download')
+                && ($approved ? $user->caseCan($case,'read') : $user->revision($request,$revision));
+        }
+        if ($approved) {
+            return $user->allows('read') && $user->allows('download') && $user->unit((int) $request['current_unit']);
+        }
+        return $user->revision($request,$revision);
+    }
+
     public static function download(Access $user, int $id): never
     {
         $doc = db()->one('SELECT * FROM documents WHERE id=?', [$id]) ?? fail(404, 'Lampiran tidak ditemukan.');
         $row = Changes::row((int) $doc['request_id']);
-        $current = (int) $row['revision'] === (int) $doc['revision'];
-        $approved = $current && $row['status'] === 'approved';
-        $requestRead = $user->request($row,'read');
-        if ($row['module'] === 'case') {
-            $case = (int) $row['case_id'];
-            $permitted = $user->caseCan($case,'read') && $user->caseCan($case,'download') && ($approved || $requestRead);
-        } elseif ($approved) {
-            $permitted = $user->allows('read') && $user->allows('download') && $user->unit((int) $row['current_unit']);
-        } else {
-            $permitted = $requestRead;
-        }
-        if (!$permitted) {
-            fail(404,'Lampiran tidak ditemukan.');
-        }
-        $rev = db()->one('SELECT submitted_at FROM change_request_revisions WHERE request_id=? AND revision=?',
+        $rev = db()->one('SELECT revision,submitted_at FROM change_request_revisions WHERE request_id=? AND revision=?',
             [(int) $doc['request_id'],(int) $doc['revision']]);
-        if (!$approved && !$rev['submitted_at'] && (int) $row['owner_id'] !== $user->id) {
+        if (!$rev || !self::canDownload($user,$row,$rev)) {
             fail(404, 'Lampiran tidak ditemukan.');
         }
         $bytes = self::bytes($doc);

@@ -165,6 +165,40 @@ def main():
           "rekap dan CSV pendidikan menghormati cakupan satuan dan izin ekspor")
     op.call("education",query={"completion_year":"2020-01-01"},expected=422)
 
+    award_values = {"type_id":4,"issuer":"DATA DEMO Pemberi sebelum revisi","awarded_on":"2020-02-29"}
+    revision_request = op.draft("award",person=1,**award_values)
+    first_upload = op.call("upload",{"id":revision_request,"revision":1},upload=("lama.pdf",PDF))[1]
+    first_document = int(re.search(rb'r=document&amp;id=(\d+)">Lampiran',first_upload)[1])
+    op.change(revision_request,"submit")
+    verify.change(revision_request,"return",comment="DATA DEMO Catatan peninjau")
+    op.change(revision_request,"revise")
+    private_upload = op.call("upload",{"id":revision_request,"revision":2},upload=("draf.pdf",PDF))[1]
+    private_document = int(re.search(rb'r=document&amp;id=(\d+)">Lampiran',private_upload)[1])
+    previous = verify.call("request",query={"id":revision_request})[1]
+    check(b"Revisi 1" in previous and b"DATA DEMO Catatan peninjau" in previous
+          and b"Revisi berikutnya" not in previous and verify.call("document",query={"id":first_document})[1] == PDF,
+          "verifikator masih dapat melihat revisi dan lampiran yang pernah diajukan saat perbaikan sedang disiapkan")
+    verify.call("request",query={"id":revision_request,"revision":2},expected=404)
+    verify.call("document",query={"id":private_document},expected=404)
+    outsider.call("document",query={"id":first_document},expected=404)
+    check(op.call("document",query={"id":private_document})[1] == PDF,
+          "revisi draf, lampirannya, dan riwayat lintas satuan dibatasi sesuai izin saat ini")
+
+    op.change(revision_request,"rebase",revision=2)
+    invalid = {**award_values,"issuer":"DATA DEMO Pemberi belum disimpan","awarded_on":""}
+    form = op.change(revision_request,"save-submit",revision=3,expected=422,**invalid)[1]
+    persisted = op.call("request",query={"id":revision_request})[1]
+    check(b'value="DATA DEMO Pemberi belum disimpan"' in form and b"wajib diisi" in form
+          and b'value="DATA DEMO Pemberi sebelum revisi"' in persisted,
+          "simpan dan ajukan yang gagal mengembalikan masukan tanpa menulis perubahan parsial")
+    op.change(revision_request,"save-submit",revision=3,**{**award_values,"issuer":"DATA DEMO Pemberi sesudah revisi"})
+    latest = verify.call("request",query={"id":revision_request})[1]
+    check(b"Revisi 3" in latest and b"DATA DEMO Pemberi sesudah revisi" in latest
+          and b"revision=1" in latest and b"revision=2" not in latest,
+          "simpan dan ajukan menerbitkan snapshot dari form serta melewati versi yang tidak diajukan")
+    verify.call("document",query={"id":private_document},expected=404)
+    op.change(revision_request,"cancel",revision=3)
+
     military = op.draft("dikmil", person=1, type_id=3, institution="DATA DEMO Akademi",
                         start_on="2019-01-01", end_on="2018-01-01", status="completed")
     op.change(military,"submit",expected=422)
@@ -213,13 +247,27 @@ def main():
         case = op.draft("case",unit=1,category="discipline",number="DEMO-1",reported_on=str(today),
                         title="Rahasia demo",officer="DATA DEMO Petugas",stage="decision",
                         parties=f"1: pihak\n{second_person}: saksi",decision="DATA DEMO Keputusan",source="DATA DEMO Surat")
+        case_upload = op.call("upload",{"id":case,"revision":1},upload=("kasus.pdf",PDF))[1]
+        case_document = int(re.search(rb'Lampiran #(\d+)',case_upload)[1])
         op.change(case,"submit")
         verify.call("request",query={"id":case},expected=404)
         admin.call("case",query={"id":1},expected=404)
         grantor.call("case-grants",{"id":1,"target":2,"capability":"read","action":"give"},expected=422)
         for cap in ["read","verify","export"]:
             grantor.call("case-grants",{"id":1,"target":4,"capability":cap,"action":"give"})
-        verify.change(case,"approve")
+        verify.call("document",query={"id":case_document},expected=404)
+        grantor.call("case-grants",{"id":1,"target":4,"capability":"download","action":"give"})
+        verify.change(case,"return",comment="DATA DEMO Lengkapi kasus")
+        op.change(case,"revise")
+        check(verify.call("document",query={"id":case_document})[1] == PDF,
+              "lampiran riwayat kasus memerlukan grant unduh yang aktif")
+        grantor.call("case-grants",{"id":1,"target":4,"capability":"download","action":"revoke"})
+        verify.call("document",query={"id":case_document},expected=404)
+        case_history = verify.call("request",query={"id":case,"revision":1})[1]
+        check(f"r=document&amp;id={case_document}".encode() not in case_history,
+              "pencabutan grant kasus juga menutup unduh dari halaman revisi lama")
+        op.change(case,"submit",revision=2)
+        verify.change(case,"approve",revision=2)
         check(b"DATA DEMO Dua" in verify.call("case",query={"id":1})[1],"kasus dengan beberapa pihak dan grant eksplisit")
         check(b"Rahasia demo" in verify.call("case-export",{"id":1})[1],"ekspor kasus dengan grant terpisah")
         grantor.call("case-grants",{"id":1,"target":4,"capability":"read","action":"revoke"})

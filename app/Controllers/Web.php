@@ -120,6 +120,13 @@ final class Web
                 } catch (\Throwable) {
                     self::view('error','Permintaan gagal',$user,['message'=>$message]);
                 }
+            } elseif (in_array($route ?? '',['request','upload'],true) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+                && $user && in_array($status,[409,422],true)) {
+                try {
+                    self::request($user,id($_POST['id'] ?? ''),$_POST,$message);
+                } catch (\Throwable) {
+                    self::view('error','Permintaan gagal',$user,['message'=>$message]);
+                }
             } else {
                 self::view('error','Permintaan gagal',$user,['message'=>$message]);
             }
@@ -454,30 +461,53 @@ final class Web
         self::view('new','Draf ' . Records::LABELS[$module],$user,compact('module','fields','personId','item','values') + $extra);
     }
 
-    private static function request(Access $user, int $id): void
+    private static function request(Access $user, int $id, array $input = [], ?string $message = null): void
     {
         $row = Changes::row($id);
-        Changes::canReview($user,$row,'read');
-        $number = id($_GET['revision'] ?? '') ?: (int) $row['revision'];
-        if ($number > (int) $row['revision']) {
+        $canWrite = $user->request($row,'write');
+        if (!$canWrite && !$user->request($row,'verify')) {
+            fail(404,'Pengajuan tidak ditemukan.');
+        }
+        $chosen = $input['revision'] ?? $_GET['revision'] ?? null;
+        if ($chosen !== null) {
+            $number = id($chosen);
+        } elseif ($canWrite) {
+            $number = (int) $row['revision'];
+        } else {
+            $latest = db()->one('SELECT MAX(revision) AS revision FROM change_request_revisions
+                WHERE request_id=? AND submitted_at IS NOT NULL',[$id]);
+            $number = (int) $latest['revision'];
+        }
+        if (!$number || $number > (int) $row['revision']) {
             fail(404,'Revisi tidak ditemukan.');
         }
         $current = $number === (int) $row['revision'];
         $selected = array_replace($row,['revision'=>$number]);
         $revision = Changes::revision($selected);
-        if (!$revision || (!$revision['submitted_at'] && (int) $row['owner_id'] !== $user->id)) {
+        if (!$revision || !$user->revision($row,$revision)) {
             fail(404,'Revisi tidak ditemukan.');
         }
         $context = Changes::context($selected);
         $values = crypto()->open($revision['payload_cipher'],$context);
         $before = crypto()->open($revision['before_cipher'],$context . ':before');
+        if ($current && $canWrite && $row['status'] === 'draft'
+            && in_array($input['action'] ?? '',['edit','save-submit'],true)) {
+            $values = array_replace($values,array_intersect_key($input,Records::fields($row['module'])));
+        }
+        $neighbors = db()->one('SELECT MAX(CASE WHEN revision<? THEN revision END) AS previous,
+            MIN(CASE WHEN revision>? THEN revision END) AS following
+            FROM change_request_revisions WHERE request_id=?'
+            . ($canWrite ? '' : ' AND submitted_at IS NOT NULL'),[$number,$number,$id]);
         $decision = db()->one('SELECT a.*,u.username FROM approval_actions a JOIN users u ON u.id=a.actor_id WHERE request_id=? AND revision=?',[$id,$number]);
         $documents = db()->all('SELECT id,mime,size_bytes FROM documents WHERE request_id=? AND revision=?',[$id,$number]);
+        $canDownload = $documents && Documents::canDownload($user,$row,$revision);
+        $comment = is_string($input['comment'] ?? null) ? $input['comment'] : null;
         if ($row['module'] === 'case') {
             audit($user->id,'case.revision.read',(int) $row['case_id']);
         }
         self::view('request',Records::LABELS[$row['module']] . ' · Pengajuan #' . $id,$user,
-            compact('row','selected','revision','context','values','before','decision','documents','current'));
+            compact('row','selected','revision','context','values','before','decision','documents','current',
+                'neighbors','canWrite','canDownload','message','comment'));
     }
 
     public static function displayPairs(string $module, array $values): array

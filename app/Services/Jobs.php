@@ -116,7 +116,7 @@ final class Jobs
     private static function applyService(int $id): void
     {
         $r = Changes::row($id,true);
-        $revision = Changes::revision($r);
+        $revision = Changes::revision($r) ?? fail(409,'Revisi penjadwalan tidak tersedia.');
         [$version,,$person] = Records::current($r,true);
         $data = crypto()->open($revision['payload_cipher'],Changes::context($r));
         if ($version !== (int) $revision['base_version'] || !db()->one('SELECT 1 FROM units WHERE id=? AND active=1',[$data['unit_id']])
