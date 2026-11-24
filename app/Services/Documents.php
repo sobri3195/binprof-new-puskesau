@@ -113,7 +113,11 @@ final class Documents
         if (!is_file($path) || is_link($path)) {
             fail(409, 'Berkas privat tidak tersedia.');
         }
-        $bytes = crypto()->decrypt((string) file_get_contents($path),'document:' . $doc['storage_key']);
+        $encrypted = @file_get_contents($path);
+        if ($encrypted === false) {
+            fail(409,'Berkas privat tidak dapat dibaca.');
+        }
+        $bytes = crypto()->decrypt($encrypted,'document:' . $doc['storage_key']);
         if (strlen($bytes) !== (int) $doc['size_bytes'] || !hash_equals($doc['checksum'], hash('sha256',$bytes))) {
             fail(409, 'Integritas berkas tidak dapat diperiksa.');
         }
@@ -125,6 +129,11 @@ final class Documents
         foreach (db()->all('SELECT * FROM documents WHERE request_id=? AND revision=?', [$request,$revision]) as $doc) {
             self::bytes($doc);
         }
+    }
+
+    public static function checkIntegrity(array $document): void
+    {
+        self::bytes($document);
     }
 
     public static function canDownload(Access $user, array $request, array $revision): bool

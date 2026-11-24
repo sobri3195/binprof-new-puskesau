@@ -8,12 +8,19 @@ final class Crypto
 
     public function __construct(string $file)
     {
-        if (!is_file($file)) {
+        if (!is_file($file) || ($contents = @file_get_contents($file)) === false) {
             throw new \RuntimeException('Keyring missing');
         }
-        $this->keyring = json_decode((string) file_get_contents($file), true, 16, JSON_THROW_ON_ERROR);
-        $this->key($this->keyring['keys'][$this->keyring['active']]);
-        $this->key($this->keyring['digest']);
+        $keyring = json_decode($contents,true,16,JSON_THROW_ON_ERROR);
+        $active = $keyring['active'] ?? null;
+        if ((!is_string($active) && !is_int($active)) || (string) $active === '' || str_contains((string) $active,':')
+            || !is_array($keyring['keys'] ?? null) || !is_string($keyring['keys'][$active] ?? null)
+            || !is_string($keyring['digest'] ?? null)) {
+            throw new \RuntimeException('Invalid keyring');
+        }
+        $this->key($keyring['keys'][$active]);
+        $this->key($keyring['digest']);
+        $this->keyring = $keyring;
     }
 
     private function key(string $encoded): string
@@ -46,11 +53,18 @@ final class Crypto
 
     public function decrypt(string $envelope, string $context): string
     {
-        [$version, $encoded] = explode(':', $envelope, 2);
+        [$version,$encoded] = array_pad(explode(':',$envelope,2),2,null);
+        $key = $this->keyring['keys'][$version] ?? null;
+        if ($encoded === null || !is_string($key)) {
+            throw new \RuntimeException('Invalid encrypted envelope or unavailable key');
+        }
         $bytes = sodium_base642bin($encoded, SODIUM_BASE64_VARIANT_ORIGINAL);
         $size = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+        if (strlen($bytes) < $size + SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_ABYTES) {
+            throw new \RuntimeException('Invalid encrypted content length');
+        }
         $value = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(substr($bytes, $size), $context,
-            substr($bytes, 0, $size), $this->key($this->keyring['keys'][$version]));
+            substr($bytes, 0, $size), $this->key($key));
         if ($value === false) {
             throw new \RuntimeException('Unable to authenticate stored content');
         }
