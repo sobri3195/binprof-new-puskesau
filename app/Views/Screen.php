@@ -6,7 +6,7 @@ use Binprof\Controllers\Web;
 use Binprof\Policies\Access;
 use Binprof\Repositories\Directory;
 use Binprof\Repositories\HistoryReport;
-use Binprof\Services\{Admin,Changes,Records};
+use Binprof\Services\{Admin,Changes,Records,ReportExport};
 use function Binprof\{asset,csrfField,e,url};
 
 final class Screen
@@ -26,7 +26,13 @@ final class Screen
             $menu += ['dashboard'=>'Dashboard','personnel'=>'Personel','education'=>'Pendidikan','awards'=>'Penghargaan',
                 'retirement'=>'Perkiraan pensiun'];
         }
+        if ($actor->allows('read') || $actor->allows('admin')) {
+            $menu['staffing'] = 'Kebutuhan jabatan';
+        }
         $menu += ['requests'=>'Pengajuan','notifications'=>'Notifikasi','cases'=>'Kasus ditugaskan'];
+        if ($actor->allows('write')) {
+            $menu['imports'] = 'Impor data lama';
+        }
         if ($actor->account['case_manager']) {
             $menu['case-grants'] = 'Penugasan kasus';
         }
@@ -42,6 +48,13 @@ final class Screen
         echo '<form method="post" action="' . e(url($route)) . '"' . ($file ? ' enctype="multipart/form-data"' : '') . '>' . csrfField();
         foreach ($hidden as $name=>$value) {
             echo '<input type="hidden" name="' . e($name) . '" value="' . e($value) . '">';
+        }
+    }
+
+    public static function exportButtons(): void
+    {
+        foreach (ReportExport::formats() as $format=>$label) {
+            echo '<button class="secondary" name="format" value="' . e($format) . '">Ekspor ' . e($label) . '</button> ';
         }
     }
 

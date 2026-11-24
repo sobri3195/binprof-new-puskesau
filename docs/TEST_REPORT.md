@@ -10,12 +10,13 @@ Lingkungan uji cloud Debian 13 menggunakan PHP CLI 8.4.28, MariaDB 11.8.9, dan C
 | Integrasi HTTP | 42 pemeriksaan bernama lulus melalui handler dan MariaDB nyata. Cakupan termasuk CSRF, snapshot, persetujuan sendiri, konflik versi, rollback duplikat, cakupan satuan/modul, unggah, dokumen, pendidikan, penghargaan, CSV, kasus, mutasi, arsip, pengingat, rate limit, filter dan ekspor rekap, integritas master, pengajuan atomik dari formulir, isolasi riwayat draf, serta pencabutan grant unduh lampiran kasus historis. |
 | Integrasi CLI | Tes akhir bulan 2027 dan tahun kabisat 2028, lease aktif/kedaluwarsa, mutasi efektif, dan invalidasi perkiraan lulus. |
 | Regresi audit P0 | 15 pemeriksaan lulus. Cakupan mencakup rebase pada kolom berbeda, pilihan bentrok, formulir lama dari tab lain, kelengkapan draf, rentang tanggal di dashboard, dasar perkiraan, jenis nomor nonaktif, Dikmil, batas POST 413, penggantian dan pelepasan lampiran, serta 41 login sah berturut-turut dengan pembatasan kegagalan tetap aktif. |
+| Regresi P1 | 18 pemeriksaan lulus. Cakupan termasuk XLSX dibaca melalui openpyxl, teks PDF diekstrak dengan pdftotext, hak ekspor termasuk grant kasus, dry-run CSV, deteksi duplikat dan rollback batch, persetujuan profil dan riwayat, serta hitungan jabatan menurut cakupan, status dan bulan. Migrasi 003→004 mempertahankan isi 31 tabel, termasuk tujuh lampiran privat. |
 | Konkurensi | Dua proses verifikasi menghasilkan tepat satu keputusan dan satu penghargaan. Pada basis data restore terpisah, kegagalan penulisan notifikasi yang diinjeksi menggulung balik batch, dua proses retry selesai dengan tiga notifikasi, dan ulang setelah commit tidak menambah baris. |
 | Chromium | 1440×900 dan 390×844 pada fallback serta clean URL. Login, skip link, navigasi, rekap, fokus dan reset peta serta tautan personel di marker lulus. Marker dan daftar personel tetap dapat dipakai saat permintaan latar lokal sengaja dihentikan oleh runner. Formulir pengajuan mempertahankan input saat validasi gagal, lalu mengirim nilai koreksi pada percobaan berikutnya. |
-| Pemulihan | Dump dan impor ke database terpisah dengan dokumen dan keyring yang dipulihkan. Manifest cocok pada 32 tabel dan tujuh lampiran, termasuk dua lampiran yang dilepas pada draf. Relasi, dekripsi dan digest identitas serta checksum dokumen lulus. Pengukuran 450 ms sebelumnya memakai fixture empat lampiran pada skema 002. |
+| Pemulihan | Dump dan impor ke database terpisah dengan dokumen dan keyring yang dipulihkan. Manifest skema 004 cocok pada 34 tabel dan tujuh lampiran, termasuk dua lampiran yang dilepas pada draf. Relasi, dekripsi dan digest identitas serta checksum dokumen lulus. Pengukuran 450 ms sebelumnya memakai fixture empat lampiran pada skema 002. |
 | Kegagalan pemulihan | Uji menemukan lampiran hilang atau rusak, keyring salah, digest identitas berbeda, kunci historis yang hilang setelah rotasi, dan data berbeda meski jumlah baris sama. Uji terpisah mengubah satu nilai pada database hasil restore dan memeriksa kegagalan perbandingan, lalu mengembalikan nilai dan memperoleh kecocokan. |
 | Privasi direktori | Paket diekstrak dan diuji pada layout lokal A dan B. Halaman login dan aset dapat diakses. Probe sintetis, SQL dan jalur kunci mendapat 404. Preflight menolak alias yang mencakup penyimpanan atau direktori sementara unggahan, dan aplikasi menolak symlink sesi/dokumen ke direktori publik. Galat bootstrap mengembalikan pesan umum. |
-| Sintaks | 49 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
+| Sintaks | 56 berkas PHP lulus lint. JavaScript peta lulus `node --check`. |
 
 ## Kinerja sintetis
 
@@ -39,11 +40,14 @@ BINPROF_TEST_PHP="$(command -v php)" python3 tests/http_flow.py
 BINPROF_TEST_PHP="$(command -v php)" python3 tests/concurrency.py
 python3 tests/browser_smoke.py
 python3 tests/p0_regression.py
-find app cli config public tests -name '*.php' -print0 | xargs -0 -n1 php -l
+python3 tests/p1_regression.py
+find app cli config public tests vendor-exports -name '*.php' -print0 | xargs -0 -n1 php -l
 node --check public/assets/map.js
 tools/package-release.sh
 BINPROF_TEST_PHP="$(command -v php)" python3 tests/deployment_layout.py dist/binprofkes-cpanel.zip
 ```
+
+Regresi P1 memakai ekstensi PHP `zip`, paket Python `openpyxl`, dan perintah `pdftotext` dari Poppler.
 
 Untuk clean URL, jalankan server yang sama dengan `clean_urls=true`, lalu arahkan skrip browser ke port tersebut lewat `BINPROF_TEST_URL`. Uji retry menargetkan database terpisah bernama `binprof_restore` hasil restore dari fixture integrasi. Untuk benchmark, impor skema, demo dan `tests/perf_fixture.sql` ke database MariaDB kosong, buat akun sintetis `demo-bench` dengan peran Pimpinan dan scope 100 satuan, lalu jalankan server dengan `PHP_CLI_SERVER_WORKERS=4`. Arahkan `tests/benchmark.py` ke port server tersebut.
 

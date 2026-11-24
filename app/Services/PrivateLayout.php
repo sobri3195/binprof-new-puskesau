@@ -23,6 +23,7 @@ final class PrivateLayout
         $storage = rtrim($config['storage'],'/');
         $paths = [
             'kode aplikasi'=>[$project . '/app',false],
+            'dependensi ekspor'=>[$project . '/vendor-exports',false],
             'alat CLI'=>[$project . '/cli',false],
             'skema basis data'=>[$project . '/database',false],
             'direktori konfigurasi'=>[$project . '/config',false],

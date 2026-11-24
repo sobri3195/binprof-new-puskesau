@@ -11,7 +11,7 @@ $params = $filter + $report->filters;
     <div class="section-heading">
         <div><h2>Riwayat terverifikasi</h2><p class="muted">Satu baris per catatan riwayat.</p></div>
         <?php if ($user->allows('export')): ?>
-            <?php V::form('export',$params + ['report'=>$report->route]); ?><button class="secondary">Ekspor rekap CSV</button></form>
+            <?php V::form('export',$params + ['report'=>$report->route]); ?><?php V::exportButtons(); ?></form>
         <?php endif ?>
     </div>
     <?php if (!$list): ?>

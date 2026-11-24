@@ -2,3 +2,4 @@
 /TASKS.md whitespace=-blank-at-eol
 /brainstorming.md whitespace=-blank-at-eol
 /public/assets/vendor/leaflet/* whitespace=cr-at-eol
+/vendor-exports/tfpdf/** whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof,-space-before-tab

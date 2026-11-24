@@ -1,6 +1,6 @@
 # Instalasi BINPROFKES di cPanel
 
-Paket berisi PHP native, SQL dan aset Leaflet lokal. PHP 8.4.28 dan MariaDB 11.8.9 diuji dalam lingkungan cloud lokal. Periksa cabang PHP yang dipelihara, versi server hosting, PDO MySQL, Fileinfo, Mbstring, Sodium, HTTPS, kuota, batas upload, PHP CLI, dan Cron Jobs.
+Paket berisi PHP native, SQL, aset Leaflet, dan pustaka PDF lokal. PHP 8.4.28 dan MariaDB 11.8.9 diuji dalam lingkungan cloud lokal. Periksa cabang PHP yang dipelihara, versi server hosting, PDO MySQL, Fileinfo, Mbstring, Sodium, HTTPS, kuota, batas upload, PHP CLI, dan Cron Jobs. Aktifkan ekstensi PHP `zip` pada PHP/FPM untuk ekspor XLSX. CSV dan PDF tetap tersedia pada instalasi tanpa ekstensi tersebut.
 
 ## Membuat paket dari checkout
 
@@ -13,7 +13,7 @@ Jalankan `tools/package-release.sh` dari checkout Git. Hasil default adalah `dis
 | A | `/home/AKUN/binprof/public` | `/home/AKUN/binprof` di luar root semua domain lain. |
 | B | `/home/AKUN/public_html/binprof` | `/home/AKUN/binprof_private`. Salin `index.php`, `.htaccess` dan `assets/` ke document root. Atur `BINPROF_ROOT` di PHP/FPM atau atur lokasi privat absolut pada `index.php`. |
 
-1. Buat database dan akun lewat cPanel. Impor `database/binprofkes.sql` ke database kosong, menggunakan akun migrasi bila memungkinkan. Jalankan hanya migrasi yang belum tercatat untuk upgrade. Rilis ini memerlukan migrasi 003 pada instalasi yang masih memakai skema 002. Cadangkan dahulu karena DDL mesin ini melakukan commit implisit.
+1. Buat database dan akun lewat cPanel. Impor `database/binprofkes.sql` ke database kosong, menggunakan akun migrasi bila memungkinkan. Cadangkan sebelum upgrade karena DDL mesin ini melakukan commit implisit. Jalankan berkas bernomor dari `database/migrations/` secara berurutan untuk setiap versi yang belum tercatat. Rilis ini memerlukan skema 004.
 2. Salin `config/example.php` ke `config/local.php` privat. Isi DSN dan kredensial setempat. Gunakan path absolut untuk konfigurasi, penyimpanan dan keyring. Pertahankan `require_https=true`; aktifkan TLS di hosting. Isi `base_path` dengan prefiks URL seperti `/binprof` hanya bila aplikasi memang diakses lewat prefiks tersebut.
 3. Jalankan `php cli/init-storage.php /path/root-subdomain /path/public_html`, lalu `php cli/preflight.php /path/root-subdomain /path/public_html`. Argumen pertama adalah direktori publik aplikasi. Sertakan setiap document root alias sebagai argumen tambahan. Kedua perintah memakai `public/` dari paket bila dijalankan tanpa argumen. Jaga hak akses sesi, kunci, log dan cadangan hanya untuk akun layanan.
 4. Buat dua akun awal melalui stdin privat. Gunakan akun berbeda dan kata sandi baru yang kuat. Simpan JSON sementara di luar semua webroot dengan mode 0600. Hapus setelah berhasil. Jangan masukkan kata sandi ke argumen atau log.

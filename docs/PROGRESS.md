@@ -15,7 +15,9 @@
 | T38 | Terverifikasi lokal, menunggu host target | ZIP dari commit Git, preflight kedua layout, penolakan root yang tumpang tindih dan symlink sesi/dokumen publik, serta probe HTTP sintetis lulus. Apache/cPanel, alias nyata, TLS, kuota dan cron pada host target masih perlu diperiksa. |
 | T39 | Terverifikasi lokal, menunggu target instansi | Dump dan restore terpisah dibandingkan dengan manifest dari CLI read-only. Uji mendeteksi lampiran hilang atau rusak, kunci salah, digest identitas berbeda, serta isi tabel yang berbeda dengan jumlah baris sama. |
 | T40 | Menunggu verifikasi deployment/UAT | Retensi, target pemulihan dan UAT instansi belum tersedia. |
-| T23, T33 | P1 | Menunggu dasar aturan resmi pensiun dan sumber data lama yang sah. |
+| T23 | Menunggu sumber resmi | Otomatisasi pensiun tetap tidak aktif sampai aturan, masa berlaku, kategori, dan atribut dapat diverifikasi. |
+| T33 | Alur lokal berjalan | Pemetaan CSV oleh operator, dry-run, laporan duplikasi dan kesalahan cakupan, serta staging draf atomik. Sumber sah dan pemetaan instansi diperlukan untuk UAT. |
+| Ekspansi PRD P1 | Berjalan lokal | XLSX/PDF mengikuti akses ekspor dan filter yang ada. Rekap kebutuhan jabatan memakai target resmi yang diinput administrator serta riwayat penempatan terverifikasi. Email/WhatsApp menunggu konfigurasi dan persetujuan instansi. |
 
 Rincian perintah dan hasil ada di [TEST_REPORT.md](TEST_REPORT.md). Gunakan basis data sintetis kosong saat mengulang tes HTTP. Prioritas berikutnya adalah memverifikasi pemasangan pada host uji serta menjalankan skenario penerimaan yang belum tercakup sebelum pemakaian produksi.
 

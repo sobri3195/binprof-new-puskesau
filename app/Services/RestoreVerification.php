@@ -57,12 +57,17 @@ final class RestoreVerification
 
         return $db->transaction(static function () use ($db): array {
             $schema = (int) $db->one('SELECT MAX(version) AS version FROM schema_migrations')['version'];
-            if (!in_array($schema,[2,3],true)) {
+            if (!in_array($schema,[2,3,4],true)) {
                 fail(422,'Gunakan versi verifier yang sesuai dengan skema cadangan.');
             }
             self::checkRelations($db);
             $tables = [];
-            foreach (self::TABLE_KEYS as $table=>$order) {
+            $keys = self::TABLE_KEYS;
+            if ($schema >= 4) {
+                $keys['staffing_targets'] = 'id';
+                $keys['import_batches'] = 'token';
+            }
+            foreach ($keys as $table=>$order) {
                 $tables[$table] = self::scan($db,$table,$order);
             }
             return ['format'=>1,'schema_version'=>$schema,'tables'=>$tables];
@@ -148,7 +153,7 @@ final class RestoreVerification
     {
         if (($expected['format'] ?? null) !== $actual['format']
             || ($expected['schema_version'] ?? null) !== $actual['schema_version']
-            || !is_array($expected['tables'] ?? null) || count($expected['tables']) !== count(self::TABLE_KEYS)) {
+            || !is_array($expected['tables'] ?? null) || count($expected['tables']) !== count($actual['tables'])) {
             fail(422,'Format, skema, atau cakupan tabel manifest tidak sesuai.');
         }
         $different = [];
