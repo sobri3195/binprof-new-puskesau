@@ -1,7 +1,7 @@
 <?php use Binprof\Views\Screen as V; use function Binprof\{crypto,e}; ?>
 <section class="card"><div class="section-heading"><h2>Kasus #<?= e($id) ?></h2><div class="actions">
 <?php if ($user->caseCan($id,'write')): ?><?= V::link('Ajukan perubahan','new',['module'=>'case','id'=>$id],'button secondary') ?><?php endif ?>
-<?php if ($data && $user->caseCan($id,'export')): ?><?php V::form('case-export',['id'=>$id]); ?><button class="secondary">Ekspor kasus CSV</button></form><?php endif ?>
+<?php if ($data && $user->caseCan($id,'export')): ?><?php V::form('case-export',['id'=>$id]); ?><?php V::exportButtons(); ?></form><?php endif ?>
 </div></div>
 <?php if (!$data): ?><p class="muted">Belum ada revisi terverifikasi.</p><?php else: ?><?php V::pairs('case',$data); ?><?php endif ?>
 </section>

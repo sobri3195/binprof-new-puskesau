@@ -9,7 +9,7 @@ PRD menjadi kontrak perilaku. Brainstorming memberi arah produk dan rancangan me
 | A03 | PDF, JPEG, PNG. Batas awal 5 MiB, dimensi gambar maksimal 24 megapiksel, sepuluh berkas per revisi. Pemeriksaan struktur dasar dan MIME dijalankan. |
 | A04 | Cakupan satuan eksplisit tanpa pewarisan. Verifikator umum membutuhkan penugasan modul. Grant kasus terpisah. |
 | A05 | Zona kalender default Asia/Jakarta. Waktu aktivitas UTC. |
-| A06 | CSV dihasilkan langsung dari filter yang sama. Kolom nomor kedinasan tetap teks pada CSV. |
+| A06 | CSV, XLSX dan PDF memakai filter dan izin yang sama. XLSX menyimpan nomor kedinasan sebagai teks. Pustaka PDF dan font disertakan dalam paket privat. |
 | A07 | Leaflet 1.9.4 lokal. Peta dasar regional Natural Earth hasil ekstraksi dari world-atlas 2.0.2. Penyedia tile HTTPS opsional melalui konfigurasi. |
 | A08 | Profil mengumpulkan nama, atribut kedinasan, serta tanggal lahir opsional. Foto, alamat rumah, NIK dan kontak tidak dikumpulkan. |
 
@@ -20,7 +20,8 @@ PRD menjadi kontrak perilaku. Brainstorming memberi arah produk dan rancangan me
 - Waktu efektif adalah tanggal kalender. Riwayat interval memakai ujung kanan eksklusif. Dua perubahan yang terjadi pada tanggal yang sama tetap meninggalkan riwayat, dengan interval hari kosong untuk keadaan antara keduanya.
 - Perubahan profil atau kedinasan menandai perkiraan untuk ditinjau secara konservatif. Satu pengajuan mutasi terjadwal dapat menjadi konflik jika versi dasar berubah sebelum tanggal efektif.
 - Data produksi dimulai dari master Militer/PNS tanpa akun universal. Demo sintetis diberi label DATA DEMO. Koordinat nyata, aset instansi, retensi, serta target pemulihan instalasi menunggu keputusan pemilik layanan.
-- T33 membutuhkan sumber data lama yang sah dan pemetaan kolom. Impor data lama masih di luar paket ini.
+- T33 memiliki alur impor CSV generik dengan pemetaan oleh operator. Uji penerimaan memerlukan sumber data sah, pencocokan ID/master dan konfirmasi aturan duplikasi dari instansi.
+- T23 tetap bergantung pada dokumen aturan resmi yang tervalidasi, kategori dan atribut yang tercakup, tanggal berlaku, serta penanggung jawab pemeriksaan. Notifikasi email dan WhatsApp menunggu penetapan penyedia, penerima yang disetujui, templat pesan, dan pengaturan operasional instansi.
 
 - Keberlakuan Dikmil diturunkan dari master kategori. Riwayat historis tetap terbaca. Kategori yang tidak mengikuti Dikmil menampilkan status tidak berlaku pada profil.
 - Dasar perkiraan P0 memakai kategori, tanggal lahir, pangkat, golongan, korps, serta status dinas. Koreksi ejaan, jabatan dan lokasi penugasan menjaga validitas perkiraan. Perubahan cakupan penerima tetap dievaluasi oleh akses dan cron. Revisi lama dengan basis versi profil numerik tetap diperiksa terhadap versi profil saat ini dan dapat diperbarui melalui rebase.

@@ -25,6 +25,9 @@ cli(static function (): int {
         $public = $roots[0];
         $checks['Front controller dan aset tersedia'] = is_file($public . '/index.php')
             && is_file($public . '/assets/app.css') && is_file($public . '/assets/map.js');
+        $pdf = dirname(__DIR__) . '/vendor-exports/tfpdf';
+        $checks['Pustaka dan font PDF tersedia'] = is_readable($pdf . '/tfpdf.php')
+            && is_readable($pdf . '/font/unifont/ttfonts.php') && is_readable($pdf . '/font/unifont/DejaVuSans.ttf');
         foreach ($roots as $webRoot) {
             $problems = PrivateLayout::problems($webRoot,$config);
             $checks['Pemisahan ' . $webRoot] = !$problems;
@@ -51,10 +54,10 @@ cli(static function (): int {
             $db = Binprof\db();
             $database = $db->one('SELECT VERSION() AS v')['v'];
             $checks['Koneksi database'] = true;
-            $checks['Skema migrasi 003'] = (bool) $db->one('SELECT version FROM schema_migrations WHERE version=3');
+            $checks['Skema migrasi 004'] = (bool) $db->one('SELECT version FROM schema_migrations WHERE version=4');
         } catch (Throwable) {
             $checks['Koneksi database'] ??= false;
-            $checks['Skema migrasi 003'] = false;
+            $checks['Skema migrasi 004'] = false;
         }
     }
 
@@ -64,6 +67,9 @@ cli(static function (): int {
     }
     foreach ($notes as $note) {
         echo '  - ' . $note . PHP_EOL;
+    }
+    if (!extension_loaded('zip')) {
+        echo "Ekspor XLSX memerlukan ekstensi PHP zip. Opsi XLSX disembunyikan saat ekstensi tidak tersedia.\n";
     }
     echo "Verifikasi TLS, kuota, konfigurasi PHP/FPM dan jadwal cron pada host secara terpisah.\n";
     return in_array(false,$checks,true) ? 1 : 0;

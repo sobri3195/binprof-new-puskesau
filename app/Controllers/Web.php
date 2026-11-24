@@ -5,17 +5,17 @@ namespace Binprof\Controllers;
 use Binprof\Policies\Access;
 use Binprof\Problem;
 use Binprof\Repositories\{Directory,HistoryReport};
-use Binprof\Services\{Admin,Auth,Changes,Documents,Inbox,Jobs,PrivateLayout,Records};
+use Binprof\Services\{Admin,Auth,Changes,Documents,Inbox,Jobs,LegacyImport,PrivateLayout,Records,ReportExport,Staffing};
 use function Binprof\{audit,config,crypto,csrf,db,fail,id,url};
 
 final class Web
 {
     private const GET = [
         'dashboard','personnel','person','map','requests','request','new','cases','case','document',
-        'notifications','master','accounts','case-grants','operations','login','education','awards','retirement','password',
+        'notifications','master','accounts','case-grants','operations','login','education','awards','retirement','password','staffing','imports',
     ];
     private const POST = [
-        'login','logout','new','request','upload','master','accounts','case-grants','operations','notifications','export','case-export','password',
+        'login','logout','new','request','upload','master','accounts','case-grants','operations','notifications','export','case-export','password','staffing','imports',
     ];
 
     public static function run(): void
@@ -69,7 +69,7 @@ final class Web
                 || !in_array($route,$post ? self::POST : self::GET,true)) {
                 fail(404,'Halaman tidak ditemukan.');
             }
-            if ($post && $route === 'upload') {
+            if ($post && in_array($route,['upload','imports'],true)) {
                 $postLimit = ini_parse_quantity(ini_get('post_max_size'));
                 if ($postLimit > 0 && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > $postLimit) {
                     fail(413,'Total unggahan melebihi batas server. Pilih berkas yang lebih kecil.');
@@ -186,6 +186,22 @@ final class Web
                     Documents::upload($user,$item,$revision,$_FILES['document'] ?? [],$replaceId);
                 }
                 self::redirect('request',['id'=>$item]);
+            case 'staffing':
+                $month = Staffing::save($user,$input);
+                $_SESSION['flash'] = 'Kebutuhan jabatan disimpan.';
+                self::redirect('staffing',['period'=>$month]);
+            case 'imports':
+                if ($action === 'preview') {
+                    $preview = LegacyImport::preview($user,$input,$_FILES['document'] ?? []);
+                    self::imports($user,$input['module'],$input,$preview);
+                    exit;
+                }
+                if ($action === 'commit') {
+                    $count = LegacyImport::commit($user,$input['token'] ?? null);
+                    $_SESSION['flash'] = $count . ' draf impor dibuat. Periksa dan ajukan dari antrean pengajuan.';
+                    self::redirect('requests');
+                }
+                fail(422,'Pilih tindakan impor.');
             case 'master':
                 $kind = is_string($input['kind'] ?? null) ? $input['kind'] : '';
                 Admin::master($user,$kind,$item,$input);
@@ -218,55 +234,51 @@ final class Web
                 self::redirect('notifications');
             case 'export':
                 $user->require('export');
+                $format = ReportExport::format($input['format'] ?? 'csv');
+                $limit = ReportExport::limit($format);
                 if (array_key_exists('report',$input)) {
                     $report = new HistoryReport(is_string($input['report']) ? $input['report'] : '',$input);
                     $filter = self::reportFilters($input);
-                    $rows = (new Directory($user,$filter))->reportRows($report,5001,0,$filter['sort'] ?? null);
-                    self::requireExportLimit($rows);
+                    $rows = (new Directory($user,$filter))->reportRows($report,$limit+1,0,$filter['sort'] ?? null);
+                    self::requireExportLimit($rows,$limit);
                     audit($user->id,$report->route . '.export');
-                    self::csv($report->route === 'education' ? 'rekap-pendidikan.csv' : 'rekap-penghargaan.csv',
+                    ReportExport::send($format,$report->route === 'education' ? 'rekap-pendidikan' : 'rekap-penghargaan',
                         array_values($report->columns()),array_map($report->row(...),$rows));
                 }
                 $filter = self::filters($input);
                 $directory = new Directory($user,$filter);
-                $rows = $directory->rows(5001,0,$filter['sort'] ?? null,true);
-                self::requireExportLimit($rows);
+                $rows = $directory->rows($limit+1,0,$filter['sort'] ?? null,true);
+                self::requireExportLimit($rows,$limit);
                 audit($user->id,'personnel.export');
-                self::csv('personel.csv',['ID','Nomor kedinasan','Nama','Satuan','Kategori','Status','Perkiraan'],
+                ReportExport::send($format,'personel',['ID','Nomor kedinasan','Nama','Satuan','Kategori','Status','Perkiraan'],
                     array_map(static fn($row)=>[$row['id'],crypto()->open($row['identifier_cipher'],'identifier:' . $row['id']),
                         $row['name'],$row['unit'],$row['category'],Records::STATUS[$row['service_status']],$row['estimate_date']],$rows));
             case 'case-export':
                 $user->caseRequire($item,'read','export');
+                $format = ReportExport::format($input['format'] ?? 'csv');
                 $row = db()->one('SELECT content_cipher FROM disciplinary_cases WHERE id=? AND version>0', [$item])
                     ?? fail(404,'Kasus terverifikasi tidak ditemukan.');
                 $data = crypto()->open($row['content_cipher'],'case:' . $item);
                 audit($user->id,'case.export',$item);
-                self::csv('kasus-' . $item . '.csv',['Kolom','Nilai'],self::displayPairs('case',$data));
+                ReportExport::send($format,'kasus-' . $item,['Kolom','Nilai'],self::displayPairs('case',$data));
         }
         fail(404,'Halaman tidak ditemukan.');
     }
 
-    private static function requireExportLimit(array $rows): void
+    private static function imports(Access $user, mixed $module, array $input = [], ?array $preview = null): void
     {
-        if (count($rows) > 5000) {
-            fail(422,'Persempit filter. Ekspor dibatasi 5.000 baris.');
-        }
+        $user->require('write');
+        $module = is_string($module) ? $module : '';
+        $fields = LegacyImport::fields($module);
+        $units = array_column(Directory::unitOptions($user,true),'name','id');
+        self::view('imports','Impor data lama',$user,compact('module','fields','units','input','preview'));
     }
 
-    private static function csv(string $file, array $headers, array $rows): never
+    private static function requireExportLimit(array $rows, int $limit): void
     {
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $file . '"');
-        $stream = fopen('php://output','wb');
-        fputcsv($stream,$headers,',','"','');
-        foreach ($rows as $row) {
-            fputcsv($stream,array_map(static function ($value): string {
-                $value = (string) $value;
-                return preg_match('/^(?:[\s\p{Cf}]*[=+@-]|[\t\r\n])/u',$value) ? "'" . $value : $value;
-            },$row),',','"','');
+        if (count($rows) > $limit) {
+            fail(422,'Persempit filter. Format ini dibatasi ' . number_format($limit,0,',','.') . ' baris.');
         }
-        fclose($stream);
-        exit;
     }
 
     public static function filters(array $input): array
@@ -321,6 +333,16 @@ final class Web
                 $report = new HistoryReport($route,$_GET);
                 $list = (new Directory($user,$filter))->reportRows($report,26,($page-1)*25,$filter['sort'] ?? null);
                 self::view('history-report',$report->title(),$user,compact('report','filter','list','page'));
+                break;
+            case 'staffing':
+                $period = Staffing::period($_GET['period'] ?? substr(\Binprof\today(),0,7));
+                $month = substr($period,0,7);
+                $asOf = Staffing::asOf($period);
+                $rows = Staffing::rows($user,$period,$asOf,($page-1)*50);
+                self::view('staffing','Kebutuhan jabatan',$user,compact('month','asOf','rows','page'));
+                break;
+            case 'imports':
+                self::imports($user,$_GET['module'] ?? 'profile');
                 break;
             case 'person':
                 self::person($user,$id);

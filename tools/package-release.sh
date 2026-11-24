@@ -16,7 +16,7 @@ commit=$(git -C "$project" rev-parse --verify --end-of-options "$revision^{commi
 git -C "$project" archive --format=zip --prefix=binprofkes/ -o "$temporary" "$commit" \
     README.md TASKS.md PRD.md PROMPT_CODEX.md brainstorming.md \
     app cli config/example.php database/binprofkes.sql database/migrations docs \
-    public vendor-assets/README.md vendor-assets/package.json vendor-assets/package-lock.json \
+    public vendor-exports vendor-assets/README.md vendor-assets/package.json vendor-assets/package-lock.json \
     vendor-assets/build-outline.py vendor-assets/world-atlas-LICENSE
 mv -T -- "$temporary" "$output"
 printf 'Paket %s (%s)\n' "$output" "$commit"

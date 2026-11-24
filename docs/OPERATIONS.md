@@ -18,13 +18,26 @@ Eksekusi berkala mendukung mutasi efektif dan kelanjutan batch pengingat. Lease 
 
 Akun dapat mengganti kata sandi dengan membuktikan kata sandi lama. Pemulihan CLI oleh pemilik sistem memakai STDIN privat dengan objek `id`, `action` bernilai `reset`, dan `password`. Perintah yang sama mengatur kapabilitas kasus lewat `action` bernilai `case-capabilities` dan boolean `create` serta `cross_unit`. Audit merekam operasi. Hapus arsip input sementara setelah digunakan.
 
-## CSV
+## Ekspor laporan
 
-Gunakan izin Ekspor personel atau grant ekspor pada kasus. Personel memakai filter dan urutan daftar, maksimum 5.000 baris per permintaan. Dataset lebih besar perlu dibagi per satuan atau filter lain.
+Gunakan izin Ekspor personel atau grant baca dan ekspor pada kasus. Ekspor memakai filter dan urutan daftar. Batas per permintaan adalah 5.000 baris untuk CSV dan XLSX serta 250 baris untuk PDF. Dataset lebih besar perlu dibagi per satuan atau filter lain.
 
-Menu **Pendidikan** dan **Penghargaan** menampilkan satu baris per riwayat terverifikasi dalam cakupan satuan. Filter riwayat diterapkan pada baris, lalu diteruskan ke CSV. Rekap pendidikan mempertahankan tahun saja bila tanggal lengkap tidak diketahui. Daftar personel dan peta tetap menghitung satu orang per profil.
+Menu **Pendidikan** dan **Penghargaan** menampilkan satu baris per riwayat terverifikasi dalam cakupan satuan. Filter riwayat diterapkan pada halaman dan ekspor. Rekap pendidikan mempertahankan tahun saja bila tanggal lengkap tidak diketahui. Daftar personel dan peta tetap menghitung satu orang per profil.
 
-Di spreadsheet, impor lewat menu **Data → Dari teks/CSV**, pilih UTF-8 dan pemisah koma, lalu ubah kolom **Nomor kedinasan** menjadi tipe **Teks** sebelum memuat. Pembukaan otomatis dapat menghapus nol awal atau membulatkan nomor panjang. Nilai yang dapat dibaca sebagai formula dinetralkan dengan awalan apostrof.
+Format XLSX menyimpan setiap sel sebagai teks agar nol awal pada nomor kedinasan dan nilai yang menyerupai formula tetap utuh. Untuk CSV di spreadsheet, gunakan menu **Data → Dari teks/CSV**, pilih UTF-8 dan pemisah koma, lalu ubah kolom **Nomor kedinasan** menjadi tipe **Teks** sebelum memuat. Pembukaan otomatis dapat menghapus nol awal atau membulatkan nomor panjang. CSV menambahkan awalan apostrof pada nilai yang dapat dibaca sebagai formula.
+
+## Impor data lama
+
+1. Gunakan sumber sah yang telah dipetakan ke satuan, kategori, jenis identitas, dan master instansi. Pisahkan satu berkas untuk setiap pasangan modul dan satuan. Profil membuat personel baru. Dikum, Dikmil, dan penghargaan memakai ID personel terverifikasi dari satuan terpilih.
+2. Pada **Impor data lama**, pilih modul dan satuan. Unggah CSV UTF-8 berpemisah koma atau titik koma, maksimal 100 baris data dan 128 KiB. Masukkan judul kolom CSV sesuai sumber. Bagian **ID master dan kode nilai** menampilkan nilai yang dapat digunakan. Gunakan tanggal `YYYY-MM-DD`.
+3. Periksa laporan duplikasi, nilai tidak valid, dan cakupan pada pratinjau. Perbaiki semua baris yang ditandai. Pratinjau memeriksa data yang boleh dibaca operator, drafnya, dan baris pada berkas. Pemeriksaan unik nomor kedinasan lintas satuan berlaku saat verifikator menerbitkan profil. Pratinjau valid berlaku 10 menit dan terikat ke sesi operator.
+4. Buat draf dan periksa antrean **Pengajuan**. Perubahan yang membuat salah satu baris tidak valid menggagalkan seluruh batch. Ajukan draf yang sudah diperiksa melalui alur verifikasi yang berlaku.
+
+## Kebutuhan jabatan
+
+Administrator mencatat jumlah kebutuhan untuk setiap satuan, bulan, dan nama jabatan yang disahkan. Gunakan nama yang sama dengan riwayat kedinasan. Simpan kembali kombinasi yang sama untuk memperbarui jumlah. Pengguna dengan akses baca melihat selisih dalam cakupan satuan masing-masing. Jumlah terisi menghitung personel aktif pada akhir bulan lampau atau hari ini untuk bulan berjalan. Bulan mendatang hanya menampilkan target.
+
+## Lampiran draf
 
 Pada revisi draf, operator dapat melepas lampiran atau memilih lampiran yang akan diganti saat mengunggah. Penggantian menyimpan berkas baru dan mempertahankan berkas lama secara privat untuk audit dan pemulihan. Setelah diajukan, perubahan lampiran memakai revisi baru.
 

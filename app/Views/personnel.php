@@ -4,7 +4,7 @@
     <div class="section-heading"><h2>Hasil pencarian</h2><div class="actions">
         <?php if ($user->allows('write') && $route === 'personnel'): ?><?= V::link('Tambah personel','new',[],'button') ?><?php endif ?>
         <?php if ($user->allows('export')): ?>
-            <?php V::form('export',$filter); ?><button class="secondary">Ekspor CSV</button></form>
+            <?php V::form('export',$filter); ?><?php V::exportButtons(); ?></form>
         <?php endif ?>
     </div></div>
     <?php if (!$list): ?><p class="empty">Tidak ada personel sesuai filter.</p><?php else: ?>

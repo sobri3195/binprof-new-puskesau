@@ -138,8 +138,9 @@ final class Directory
         ],$groups);
     }
 
-    public static function unitOptions(Access $user): array
+    public static function unitOptions(Access $user, bool $activeOnly = false): array
     {
-        return db()->all('SELECT u.id,u.name FROM units u JOIN user_unit_scopes s ON s.unit_id=u.id WHERE s.user_id=? ORDER BY u.name', [$user->id]);
+        return db()->all('SELECT u.id,u.name FROM units u JOIN user_unit_scopes s ON s.unit_id=u.id WHERE s.user_id=?'
+            . ($activeOnly ? ' AND u.active=1' : '') . ' ORDER BY u.name', [$user->id]);
     }
 }

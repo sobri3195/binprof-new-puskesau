@@ -132,6 +132,7 @@ CREATE TABLE service_assignments (
   end_before DATE NULL,
   open_personnel INT UNSIGNED GENERATED ALWAYS AS (IF(end_before IS NULL,personnel_id,NULL)) STORED,
   UNIQUE(open_personnel), INDEX(personnel_id,start_on),
+  INDEX staffing_history(unit_id,position_title,service_status,start_on),
   CHECK (end_before IS NULL OR end_before >= start_on),
   FOREIGN KEY(personnel_id) REFERENCES personnel(id),
   FOREIGN KEY(unit_id) REFERENCES units(id),
@@ -349,3 +350,26 @@ INSERT INTO schema_migrations(version) VALUES (2);
 -- Migration 003. Keep detached draft files for audit and recovery.
 ALTER TABLE documents ADD COLUMN detached_at TIMESTAMP NULL DEFAULT NULL;
 INSERT INTO schema_migrations(version) VALUES (3);
+
+-- Migration 004. Store staffing targets and import receipts.
+CREATE TABLE staffing_targets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    unit_id INT UNSIGNED NOT NULL,
+    period DATE NOT NULL,
+    position_title VARCHAR(160) NOT NULL,
+    required_count INT UNSIGNED NOT NULL,
+    UNIQUE(unit_id,period,position_title),
+    INDEX(period,unit_id),
+    CHECK (DAYOFMONTH(period)=1),
+    FOREIGN KEY(unit_id) REFERENCES units(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE import_batches (
+    token CHAR(64) PRIMARY KEY,
+    author_id INT UNSIGNED NOT NULL,
+    draft_count INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(author_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_migrations(version) VALUES (4);

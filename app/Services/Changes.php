@@ -39,8 +39,12 @@ final class Changes
     public static function create(Access $user, string $module, int $personId, int $unit, int $item, array $input): int
     {
         $data = Records::normalize($module,$input);
-        return db()->transaction(static function () use ($user,$module,$personId,$unit,$item,$data): int {
-            $user = Access::load($user->id,true) ?? fail(403, 'Akun tidak aktif.');
+        $save = static function () use ($user,$module,$personId,$unit,$item,$data): int {
+            $actor = Access::load($user->id,true) ?? fail(403,'Akun tidak aktif.');
+            if ($actor->account['session_version'] !== $user->account['session_version']) {
+                fail(403,'Silakan masuk kembali.');
+            }
+            $user = $actor;
             $case = null;
             $education = in_array($module,['dikum','dikmil'],true) && $item ? $item : null;
             $award = $module === 'award' && $item ? $item : null;
@@ -69,7 +73,9 @@ final class Changes
             self::snapshot($id,1,$version,$before,$data);
             audit($user->id,'draft.create',$id);
             return $id;
-        });
+        };
+        // Bulk imports own a transaction for all drafts and the import receipt.
+        return db()->pdo->inTransaction() ? $save() : db()->transaction($save);
     }
 
     private static function newCase(Access $user, int $unit): int

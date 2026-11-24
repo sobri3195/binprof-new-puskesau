@@ -38,3 +38,5 @@ erDiagram
 ```
 
 Migrasi 003 menambah `documents.detached_at`. Lampiran yang dilepas saat draf tetap tersimpan untuk audit dan pemulihan. Daftar, unduh, dan penerbitan normal hanya memakai lampiran dengan nilai `NULL`.
+
+Migrasi 004 menambah `staffing_targets` dengan satu target per satuan, bulan, dan nama jabatan. Kolom `period` selalu menyimpan tanggal pertama bulan. Tabel `import_batches` menyimpan token acak, pembuat dan jumlah draf untuk percobaan ulang yang aman. Pratinjau yang valid disimpan terenkripsi sementara di sesi privat operator.
